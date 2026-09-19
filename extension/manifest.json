@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Firefox IP 保护桥接（非官方）",
   "short_name": "火狐 VPN",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "通过本地桥接在 Chrome 中使用 Firefox IP 保护，并提供白名单/黑名单路由、按路由生效的 DNS 防护、WebRTC 防泄漏、区域隐私保护和可移动安装。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1ReI55XpUrkq512wdrh1H4tgRL/WhmhGDYuSEqGC3/E3auJ4OrlcUz+faegqExOs/1W9wrTuW/V5MjXZgzieuNnMzQuJBAWZw10IOmhDQt9sK4VU4TZ8kJFiQrB/YggRP8KmgmW5q7MzMHrrCYt5r+nQn6DoBcTREtc94xFvDC/RW5fkT2YaIEHkaCDFBdC3orFQR2Qhl2VNhpfAF6t9h6/T7IfzGcvk36lOIjBfTRpIhApCoqbbsE1xUZCiywW7N+qZlBB7HYV/TaCXhnyQXJBOWNkM2cCqTodA0ZBhoS/D0QAPKmYrnsnXM/t45H7aTXRGUVmKGspBr+J7XL1flwIDAQAB",
   "permissions": [
@@ -14,7 +14,8 @@
     "declarativeNetRequestWithHostAccess",
     "contentSettings",
     "scripting",
-    "management"
+    "management",
+    "alarms"
   ],
   "background": {
     "service_worker": "background.js"

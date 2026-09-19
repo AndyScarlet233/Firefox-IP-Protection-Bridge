@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import socket
 import tempfile
 import threading
 import time
@@ -37,6 +38,7 @@ RESULTS = {
     "oauth_rate_limited",
     "reauth_required",
     "no_entitlement",
+    "service_restricted",
     "missing_credentials",
     "transient_error",
     "protocol_error",
@@ -46,11 +48,63 @@ FAILURE_RESULTS = {
     "oauth_rate_limited",
     "reauth_required",
     "no_entitlement",
+    "service_restricted",
     "missing_credentials",
     "transient_error",
     "protocol_error",
 }
 _PROCESS_STATE_LOCK = threading.RLock()
+
+# Guardian applies region checks to the client IP, so refreshes from an
+# ineligible egress fail with HTTP 451 regardless of account state.  These
+# requests therefore prefer a stable eligible egress: an explicit proxy from
+# the environment or a config file, then the pool's own local HTTP rotator
+# while the tunnel is running, then a direct connection.
+REFRESH_PROXY_FILE = Path(__file__).resolve().parent / "tokens" / "refresh_proxy.txt"
+REFRESH_PROXY_ROTATOR = "http://127.0.0.1:8080"
+
+
+def _clean_refresh_proxy(raw: object) -> str | None:
+    value = str(raw or "").strip().strip('"').strip("'")
+    if not value:
+        return None
+    lowered = value.lower()
+    # requests has no SOCKS support here (PySocks is not bundled), so only
+    # HTTP(S) proxies are accepted; anything else would fail confusingly.
+    if not (lowered.startswith("http://") or lowered.startswith("https://")):
+        return None
+    if any(character.isspace() for character in value):
+        return None
+    return value
+
+
+def describe_refresh_proxy(proxy: str | None) -> str:
+    """Return a log-safe proxy label without credentials."""
+    if not proxy:
+        return "direct"
+    head, sep, tail = proxy.partition("://")
+    netloc = tail.split("/", 1)[0]
+    if "@" in netloc:
+        netloc = netloc.split("@", 1)[1]
+    return f"{head}://{netloc}" if sep else proxy
+
+
+def resolve_refresh_proxy() -> str | None:
+    """Pick the egress for FxA/Guardian calls; None means direct."""
+    from_env = _clean_refresh_proxy(os.environ.get("IPP_REFRESH_PROXY"))
+    if from_env:
+        return from_env
+    try:
+        from_file = _clean_refresh_proxy(REFRESH_PROXY_FILE.read_text(encoding="utf-8").splitlines()[0] if REFRESH_PROXY_FILE.is_file() else "")
+    except OSError:
+        from_file = None
+    if from_file:
+        return from_file
+    try:
+        with socket.create_connection(("127.0.0.1", 8080), timeout=0.25):
+            return REFRESH_PROXY_ROTATOR
+    except OSError:
+        return None
 
 
 @contextmanager

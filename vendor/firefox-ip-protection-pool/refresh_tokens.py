@@ -31,7 +31,14 @@ from renewal_credentials import (
     atomic_write_text,
     load_renewal_credentials,
 )
-from refresh_state import load_refresh_state, record_refresh_state, refresh_lock, retry_delay
+from refresh_state import (
+    describe_refresh_proxy,
+    load_refresh_state,
+    record_refresh_state,
+    refresh_lock,
+    resolve_refresh_proxy,
+    retry_delay,
+)
 
 ROOT = Path(__file__).resolve().parent
 TOKENS = ROOT / "tokens"
@@ -53,12 +60,20 @@ REVALIDATE_RESULTS = {
     "rate_limited",
     "reauth_required",
     "no_entitlement",
+    "service_restricted",
 }
 
 
-def bounded_fxa_api_client(server_url: str, *, timeout=FXA_HTTP_TIMEOUT) -> APIClient:
+def bounded_fxa_api_client(
+    server_url: str,
+    *,
+    timeout=FXA_HTTP_TIMEOUT,
+    proxies: dict[str, str] | None = None,
+) -> APIClient:
     """Build a PyFxA client without adapter retries and with finite I/O."""
     session = requests.Session()
+    if proxies:
+        session.proxies.update(proxies)
     client = APIClient(server_url, session=session)
     client.timeout = timeout
     return client
@@ -209,6 +224,7 @@ def guardian_request(
     headers: dict[str, str],
     label: str,
     retry_budget: float = HTTP_RETRY_BUDGET,
+    proxies: dict[str, str] | None = None,
 ) -> requests.Response:
     """Perform a bounded Guardian request, retrying only transient failures.
 
@@ -240,6 +256,7 @@ def guardian_request(
                 f"{GUARDIAN}{path}",
                 headers=request_headers,
                 timeout=(connect_timeout, read_timeout),
+                proxies=proxies,
             )
         except requests.RequestException as exc:
             last_error = exc
@@ -355,8 +372,10 @@ def _query_usage_with_ephemeral_oauth() -> int:
     server = "https://api.accounts.firefox.com/v1"
     oauth: OAuthClient | None = None
     access: str | None = None
+    proxies = resolve_refresh_proxy()
+    print(f"[*] usage egress: {describe_refresh_proxy(proxies)}")
     try:
-        apiclient = bounded_fxa_api_client(server, timeout=USAGE_FXA_HTTP_TIMEOUT)
+        apiclient = bounded_fxa_api_client(server, timeout=USAGE_FXA_HTTP_TIMEOUT, proxies=proxies)
         sp = StretchedPassword(1, email, None, "x", None)
 
         class Dummy:
@@ -375,7 +394,7 @@ def _query_usage_with_ephemeral_oauth() -> int:
         )
         oauth_server = "https://oauth.accounts.firefox.com/v1"
         oauth = OAuthClient(client_id=FX_CLIENT_ID, server_url=oauth_server)
-        oauth.apiclient = bounded_fxa_api_client(oauth_server, timeout=USAGE_FXA_HTTP_TIMEOUT)
+        oauth.apiclient = bounded_fxa_api_client(oauth_server, timeout=USAGE_FXA_HTTP_TIMEOUT, proxies=proxies)
         try:
             access_value = oauth.authorize_token(session, scope=SCOPES, client_id=FX_CLIENT_ID)
         except Exception as exc:
@@ -407,6 +426,7 @@ def _query_usage_with_ephemeral_oauth() -> int:
                 headers=headers,
                 label="fpn/usage",
                 retry_budget=USAGE_HTTP_RETRY_BUDGET,
+                proxies=proxies,
             )
         except GuardianRequestError:
             return _usage_error_payload("transient_error")
@@ -529,8 +549,10 @@ def _refresh_once(*, force: bool) -> int:
     server = "https://api.accounts.firefox.com/v1"
     oauth: OAuthClient | None = None
     access: str | None = None
+    proxies = resolve_refresh_proxy()
+    print(f"[*] refresh egress: {describe_refresh_proxy(proxies)}")
     try:
-        apiclient = bounded_fxa_api_client(server)
+        apiclient = bounded_fxa_api_client(server, proxies=proxies)
         sp = StretchedPassword(1, email, None, "x", None)
 
         class Dummy:
@@ -552,7 +574,7 @@ def _refresh_once(*, force: bool) -> int:
         # OAuthClient creates a retrying APIClient internally.  Replace it so
         # the helper has a predictable total runtime and the supervising
         # service does not kill a legitimate slow refresh halfway through.
-        oauth.apiclient = bounded_fxa_api_client(oauth_server)
+        oauth.apiclient = bounded_fxa_api_client(oauth_server, proxies=proxies)
         try:
             access_value = oauth.authorize_token(session, scope=SCOPES, client_id=FX_CLIENT_ID)
         except Exception as exc:
@@ -562,6 +584,8 @@ def _refresh_once(*, force: bool) -> int:
                 # traffic quota is exhausted.  Keep its cooldown, but do not
                 # hard-pause a still-usable last-good ProxyPass.
                 result = "oauth_rate_limited"
+            elif status == 451:
+                result = "service_restricted"
             elif status is not None and 400 <= status <= 499:
                 result = "reauth_required"
             else:
@@ -595,6 +619,7 @@ def _refresh_once(*, force: bool) -> int:
                 "/api/v1/fpn/token",
                 headers=headers,
                 label="fpn/token",
+                proxies=proxies,
             )
         except GuardianRequestError:
             return _record_failure(
@@ -633,6 +658,14 @@ def _refresh_once(*, force: bool) -> int:
                 now=time.time(),
                 http_status=status,
                 terminal=True,
+            )
+        if status == 451:
+            return _record_failure(
+                "service_restricted",
+                state,
+                now=time.time(),
+                http_status=status,
+                retry_after=retry_after,
             )
         if status == 404:
             return _record_failure(

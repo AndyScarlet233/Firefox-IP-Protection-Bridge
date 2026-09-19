@@ -25,11 +25,13 @@ button { color: inherit; }
 .connection-card { position: relative; margin: 0 10px 8px; border-radius: 10px; border: 1px solid #d7d7db; padding: 13px; transition: background .15s, border-color .15s; }
 .connection-card.on { background: var(--green-card); border-color: #b4e8bb; }
 .connection-card.off { background: #f7f7f8; }
+.connection-card.pending { background: #eef4ff; border-color: #b8cdf5; }
 .status-line { min-height: 70px; display: flex; justify-content: space-between; align-items: flex-start; }
 .headline { font-size: 26px; line-height: 1.12; font-weight: 760; letter-spacing: -.03em; }
 .mode-hint { margin-top: 7px; font-size: 12px; color: #55555e; }
 .status-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: #d7d7db; color: #fff; font-size: 30px; font-weight: 900; opacity: .7; }
 .connection-card.on .status-mark { background: var(--green); opacity: 1; }
+.connection-card.pending .status-mark { background: #6b8de3; opacity: 1; }
 .power-button { width: 100%; height: 46px; border: 0; border-radius: 10px; background: var(--blue); color: #fff; font-weight: 750; font-size: 17px; cursor: pointer; }
 .power-button:hover { background: var(--blue-hover); }
 .power-button:disabled { opacity: .6; cursor: progress; }

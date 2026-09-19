@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 const connectionCard = $("connectionCard");
 const headline = $("headline");
 const modeHint = $("modeHint");
+const statusMark = $("statusMark");
 const power = $("power");
 const country = $("country");
 const locationButton = $("locationButton");
@@ -46,6 +47,7 @@ let regionStatus = null;
 let helper = {};
 let activeDomain = "";
 let busy = false;
+let connectionTransition = "";
 let availableLocations = [];
 
 const COUNTRY_NAMES_ZH = {
@@ -96,8 +98,8 @@ function translateUiError(message = "") {
   if (!text) return "";
   const known = [
     [/Specified native messaging host not found\.?/i, "未找到本地桥接程序。请运行 INSTALL-OR-REPAIR.cmd 修复本地桥接；修复后扩展目录可以移动或改名。"],
+    [/Error when communicating with the native messaging host\.?/i, "与本地桥接程序通信失败。请确认已安装 runtime\\vpn_bridge_host.exe，并运行 INSTALL-OR-REPAIR.cmd 修复后重启浏览器。"],
     [/Native host has exited\.?/i, "本地桥接程序已退出。请重试，或运行 INSTALL-OR-REPAIR.cmd 修复本地桥接。"],
-    [/Error when communicating with the native messaging host\.?/i, "本地桥接程序启动失败或通信协议异常。请确认已构建 runtime\\vpn_bridge_host.exe，并重新运行 INSTALL-OR-REPAIR.cmd。"],
     [/Access to the specified native messaging host is forbidden\.?/i, "Chrome 无权访问本地桥接程序。请确认扩展 ID 与安装脚本一致。"],
     [/Native bridge returned no response/i, "本地桥接程序没有返回结果。"],
     [/Native bridge timeout while running (.+)/i, (_, cmd) => `本地桥接程序执行 ${cmd} 时超时。`],
@@ -107,13 +109,15 @@ function translateUiError(message = "") {
     [/no listeners started/i, "所选地区当前没有可用节点，请换一个地区。"],
     [/exported 0 nodes/i, "所选地区当前没有可用节点，请换一个地区。"],
     [/代理进程提前退出.*no listeners started/i, "所选地区当前没有可用节点，请换一个地区。"],
-    [/missing FxA access token for Guardian usage query/i, "检测到旧版 v0.7.1 后台仍在运行。请运行 v0.7.3 的 INSTALL-OR-REPAIR.cmd，然后在扩展管理页重新加载本扩展。"],
+    [/missing FxA access token for Guardian usage query/i, "检测到旧版后台仍在运行。请运行 1.0.0 的 INSTALL-OR-REPAIR.cmd，然后在扩展管理页重新加载本扩展。"],
     [/missing Firefox renewal credentials for Guardian usage query/i, "未找到可续期的 Firefox 登录状态。请先点击“从 Firefox 导入登录状态”，然后再查询流量。"],
     [/Firefox Account session requires re-authentication for Guardian usage query/i, "Firefox 账户登录状态已失效，请在 Firefox 中重新登录后再次导入。"],
     [/Firefox Account OAuth usage query was rate-limited/i, "Mozilla 暂时限制了账户查询频率，请稍后再试。"],
     [/temporary Firefox Account\/Guardian usage query failure/i, "Mozilla 流量查询暂时失败，请稍后重试。"],
     [/Guardian usage request failed with HTTP 403/i, "当前 Mozilla 账户没有可用的 Firefox IP 保护资格。"],
-    [/Guardian usage request failed with HTTP 401/i, "Firefox 账户授权已失效，请重新导入登录状态。"]
+    [/Guardian usage request failed with HTTP 401/i, "Firefox 账户授权已失效，请重新导入登录状态。"],
+    [/HTTP 451|service_restricted|service is restricted/i, "Mozilla 拒绝了当前网络出口的请求（HTTP 451，与账户无关）。通常是出口地区暂时受限：请稍后重试；隧道建立后凭据续期会自动改走隧道出口。如反复出现，可将可用的 HTTP 代理写入 runtime 的 tokens/refresh_proxy.txt。"],
+    [/automatic renewal is paused \(service_restricted\)/i, "当前网络出口暂时被 Mozilla 拒绝（HTTP 451），请稍后重试；这不是账户问题。"]
   ];
   for (const [pattern, replacement] of known) {
     const match = text.match(pattern);
@@ -193,16 +197,43 @@ function siteUsesVpn(domain = activeDomain) {
 }
 
 function renderMain() {
-  connectionCard.classList.toggle("on", Boolean(state.enabled));
-  connectionCard.classList.toggle("off", !state.enabled);
-  headline.textContent = state.enabled ? "VPN 已开启" : "VPN 已关闭";
-  power.textContent = state.enabled ? "关闭 VPN" : "开启 VPN";
+  const pending = Boolean(connectionTransition);
+  const loading = connectionTransition === "loading";
+  const connecting = connectionTransition === "connecting";
+  const switching = connectionTransition === "switching";
+  const disconnecting = connectionTransition === "disconnecting";
+  connectionCard.classList.toggle("on", Boolean(state.enabled) && !pending);
+  connectionCard.classList.toggle("off", !state.enabled && !pending);
+  connectionCard.classList.toggle("pending", pending);
+  headline.textContent = loading
+    ? "正在读取状态…"
+    : connecting
+      ? "正在连接…"
+      : switching
+        ? "正在切换位置…"
+        : disconnecting
+          ? "正在关闭…"
+          : (state.enabled ? "VPN 已开启" : "VPN 已关闭");
+  power.textContent = loading
+    ? "正在读取…"
+    : connecting
+      ? "正在连接…"
+      : switching
+        ? "正在切换…"
+        : disconnecting
+          ? "正在关闭…"
+          : (state.enabled ? "关闭 VPN" : "开启 VPN");
+  if (statusMark) statusMark.textContent = pending ? "…" : "✓";
   locationText.textContent = `位置：${countryName()}`;
-  modeHint.textContent = state.proxyMode === "allowlist"
-    ? `白名单 · ${state.allowlist.length} 个网站`
-    : (state.bypassSites.length ? `黑名单 · ${state.bypassSites.length} 个直连网站` : "黑名单 · 默认全走 VPN");
+  modeHint.textContent = pending
+    ? (loading
+      ? "正在检查本地代理…"
+      : (disconnecting ? "正在恢复浏览器直连…" : "正在验证本地代理…"))
+    : (state.proxyMode === "allowlist"
+      ? `白名单 · ${state.allowlist.length} 个网站`
+      : (state.bypassSites.length ? `黑名单 · ${state.bypassSites.length} 个直连网站` : "黑名单 · 默认全走 VPN"));
   settingsSummary.textContent = state.proxyMode === "allowlist" ? "白名单" : "黑名单";
-  const showSiteControls = Boolean(state.enabled && activeDomain);
+  const showSiteControls = Boolean(state.enabled && activeDomain && !pending);
   siteRow.hidden = !showSiteControls;
   siteToggle.checked = showSiteControls && siteUsesVpn();
   siteRow?.classList.toggle("vpn-on-site", Boolean(showSiteControls && siteToggle.checked));
@@ -349,8 +380,35 @@ async function refreshRegionPageDiagnostics() {
   }
 }
 
+function adoptStatusResponse(response) {
+  state = { ...state, ...(response?.state || {}) };
+  helper = response?.helper || helper;
+  privacyStatus = response?.privacy || privacyStatus;
+  regionStatus = response?.region || regionStatus;
+  return response;
+}
+
+async function reconcileAfterCommandFailure() {
+  try {
+    adoptStatusResponse(await send({ type: "status" }));
+  } catch (_) {
+    // If the background worker cannot be queried, do not leave a stale green
+    // VPN state in the popup after a command has already failed open.
+    state = { ...state, enabled: false };
+  }
+}
+
 async function refreshStatus() {
   setBusy(true);
+  connectionTransition = "loading";
+  renderMain();
+  showNotice("正在读取 VPN 状态…");
+  // Status and locations are independent requests; run them concurrently so
+  // the popup is not serialized behind two native-messaging round trips.
+  const locationsPromise = send({ type: "locations" }).then(
+    (response) => ({ ok: true, response }),
+    (error) => ({ ok: false, error })
+  );
   try {
     const response = await send({ type: "status" });
     state = { ...state, ...(response.state || {}) };
@@ -358,13 +416,13 @@ async function refreshStatus() {
     privacyStatus = response.privacy || null;
     regionStatus = response.region || null;
     let locationWarning = "";
-    try {
-      const locationResponse = await send({ type: "locations" });
-      populateLocations(locationResponse.locations || []);
-    } catch (locationError) {
-      // Keep a useful fallback if the server list cannot be refreshed right now.
+    // Keep a useful fallback if the server list cannot be refreshed right now.
+    const locationResult = await locationsPromise;
+    if (locationResult.ok) {
+      populateLocations(locationResult.response.locations || []);
+    } else {
       populateLocations([]);
-      locationWarning = `可用地区列表暂时无法刷新：${translateUiError(locationError.message)}`;
+      locationWarning = `可用地区列表暂时无法刷新：${translateUiError(locationResult.error.message)}`;
     }
     country.value = [...country.options].some(o => o.value === (state.country || "REC")) ? (state.country || "REC") : "REC";
     activeDomain = await getActiveDomain();
@@ -383,6 +441,7 @@ async function refreshStatus() {
     showNotice(error.message, "error");
     credentialStatus.textContent = "未找到本地桥接程序，请重新运行安装或更新脚本。";
   } finally {
+    connectionTransition = "";
     setBusy(false);
     renderMain();
   }
@@ -392,11 +451,21 @@ power.addEventListener("click", async () => {
   if (busy) return;
   setBusy(true);
   const next = !state.enabled;
+  connectionTransition = next ? "connecting" : "disconnecting";
+  renderMain();
   showNotice(next ? "正在连接 Firefox IP 保护服务…" : "正在断开连接…");
   try {
     const response = await send({ type: "toggle", enabled: next, country: country.value });
-    state.enabled = next;
-    state.lastError = "";
+    // Verify both connect and disconnect. A successful command acknowledgement
+    // is not enough if Chrome retained an extension-owned PAC or the child died
+    // between the command and the UI update.
+    const verified = adoptStatusResponse(await send({ type: "status" }));
+    if (verified.health?.healthy !== true || Boolean(state.enabled) !== next ||
+        (next && helper.running !== true)) {
+      throw new Error(verified.helperError || (next
+        ? "本地 SOCKS5 代理未能保持运行，已恢复浏览器直连。"
+        : "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。"));
+    }
     if (next && response?.resolvedCountry && country.value === "REC") {
       showNotice(`VPN 已连接，推荐位置当前使用 ${COUNTRY_NAMES_ZH[response.resolvedCountry] || response.resolvedCountry}。`, "good");
     }
@@ -413,6 +482,7 @@ power.addEventListener("click", async () => {
       privacyStatus = privacyResponse.privacy || privacyStatus;
       regionStatus = regionResponse.region || regionStatus;
     } catch (_) {}
+    connectionTransition = "";
     setBusy(false);
     renderMain();
     renderSettings();
@@ -421,13 +491,24 @@ power.addEventListener("click", async () => {
 });
 
 country.addEventListener("change", async () => {
+  const selected = country.value;
+  const wasEnabled = Boolean(state.enabled);
+  connectionTransition = wasEnabled ? "switching" : "";
   setBusy(true);
+  renderMain();
   try {
-    await send({ type: "country", country: country.value });
-    state.country = country.value;
+    await send({ type: "country", country: selected });
+    const verified = adoptStatusResponse(await send({ type: "status" }));
+    if (verified.health?.healthy !== true || (wasEnabled && (!state.enabled || helper.running !== true))) {
+      throw new Error(verified.helperError || "位置切换后 VPN 状态未能通过检查。");
+    }
+    state.country = selected;
     showNotice(state.enabled ? "位置已切换。" : "位置已保存。", "good");
-  } catch (error) { showNotice(error.message, "error"); }
-  finally { setBusy(false); renderMain(); }
+  } catch (error) {
+    showNotice(error.message, "error");
+    await reconcileAfterCommandFailure();
+  }
+  finally { connectionTransition = ""; setBusy(false); renderMain(); renderSettings(); }
 });
 
 siteToggle.addEventListener("change", async () => {
@@ -439,7 +520,10 @@ siteToggle.addEventListener("change", async () => {
     state.allowlist = response.allowlist || state.allowlist;
     state.bypassSites = response.bypassSites || state.bypassSites;
     showNotice(desired ? `${activeDomain} 将使用 VPN。` : `${activeDomain} 将直接连接。`, "good");
-  } catch (error) { showNotice(error.message, "error"); }
+  } catch (error) {
+    showNotice(error.message, "error");
+    await reconcileAfterCommandFailure();
+  }
   finally { setBusy(false); renderMain(); renderSettings(); }
 });
 
@@ -450,7 +534,10 @@ async function changeMode(mode) {
     await send({ type: "proxyMode", mode });
     state.proxyMode = mode;
     showNotice(mode === "allowlist" ? "已切换为白名单模式。" : "已切换为黑名单模式。", "good");
-  } catch (error) { showNotice(error.message, "error"); }
+  } catch (error) {
+    showNotice(error.message, "error");
+    await reconcileAfterCommandFailure();
+  }
   finally { setBusy(false); renderMain(); renderSettings(); }
 }
 modeAllowlist.addEventListener("click", () => changeMode("allowlist"));
@@ -530,7 +617,10 @@ async function addManaged() {
     state.bypassSites = response.bypassSites || state.bypassSites;
     domainInput.value = "";
     showNotice("网站规则已添加。", "good");
-  } catch (error) { showNotice(error.message, "error"); }
+  } catch (error) {
+    showNotice(error.message, "error");
+    await reconcileAfterCommandFailure();
+  }
   finally { setBusy(false); renderMain(); renderSettings(); }
 }
 addDomain.addEventListener("click", addManaged);
@@ -543,7 +633,10 @@ async function removeDomain(domain) {
     state.allowlist = response.allowlist || [];
     state.bypassSites = response.bypassSites || [];
     showNotice("网站规则已删除。", "good");
-  } catch (error) { showNotice(error.message, "error"); }
+  } catch (error) {
+    showNotice(error.message, "error");
+    await reconcileAfterCommandFailure();
+  }
   finally { setBusy(false); renderMain(); renderSettings(); }
 }
 

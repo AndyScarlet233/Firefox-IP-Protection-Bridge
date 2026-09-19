@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 HOST_NAME = "org.firefox_ip_protection.chrome_bridge"
-BRIDGE_VERSION = "0.7.3"
+BRIDGE_VERSION = "0.9.1"
 SOCKS_HOST = "127.0.0.1"
 SOCKS_PORT = 1090
 SCHEMA = "firefox-ip-protection-renewal-credentials-v1"
@@ -46,11 +46,40 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 POOL_LOG = LOG_DIR / "ipp-pool.log"
 EXITS_JSON = UPSTREAM / "export" / "exits.json"
 LATENCY_CACHE_FILE = ROOT / "node-latency-cache.json"
-LOCATION_CACHE_SECONDS = 1800
-LATENCY_CACHE_SECONDS = 1800
+# Long caches keep a browser restart from re-fetching the server list and
+# re-probing every country before the tunnel can come up.
+LOCATION_CACHE_SECONDS = 21600
+LATENCY_CACHE_SECONDS = 21600
 LATENCY_PROBE_TIMEOUT = 1.25
 MAX_PROBE_NODES = 24
-MAX_FAST_BACKENDS = 3
+# Keep several ranked exits behind the aggregate listener. The pool rotates
+# through them when the first exit is temporarily unhealthy instead of
+# pinning every browser request to one stale backend.
+MAX_FAST_BACKENDS = 5
+SOCKS_PROBE_HOST = "example.com"
+SOCKS_PROBE_PORT = 80
+SOCKS_PROBE_TARGETS = (
+    ("example.com", 80),
+    ("www.mozilla.org", 443),
+    ("www.cloudflare.com", 443),
+)
+SOCKS_PROBE_TIMEOUT = 4.0
+# Token renewal can legitimately take up to the helper's 100-second budget
+# before the pool creates its first listener.
+STARTUP_TIMEOUT_SECONDS = 140.0
+STATUS_PROBE_TTL_SECONDS = 5.0
+# Local HTTP rotator (127.0.0.1:8080). The refresh helper routes its
+# Mozilla calls through it while the tunnel is up, so Guardian's region
+# check sees the eligible exit IP instead of the local network egress.
+HTTP_ROTATOR_PORT = 8080
+# Guardian 451 windows come and go within minutes; retry token-not-ready
+# starts inside this budget (keeps the extension's 150s start timeout safe).
+STARTUP_RETRY_DEADLINE_SECONDS = 115.0
+STARTUP_RETRY_DELAY_SECONDS = 10.0
+# A new attempt needs enough budget for one helper round trip to complete and
+# log its result; otherwise it gets killed mid-flight and classification loses
+# its evidence.
+STARTUP_MIN_ATTEMPT_BUDGET_SECONDS = 30.0
 
 
 def _create_kill_on_close_job_for_process(proc: subprocess.Popen[Any]):
@@ -154,6 +183,11 @@ class PoolManager:
         self.country = "REC"
         self.resolved_country = ""
         self.lock = threading.RLock()
+        # End-to-end SOCKS5 probes cost a full round trip through the tunnel.
+        # Cache the verdict briefly so popup opens and post-start checks do not
+        # repeat it back to back.
+        self._last_probe_ok = False
+        self._last_probe_ts = 0.0
 
     def prerequisites(self) -> None:
         if not UPSTREAM.joinpath("ipp_pool.py").is_file():
@@ -188,7 +222,10 @@ class PoolManager:
             raise BridgeError("无法启动本地后台程序。") from exc
 
     def sync(self) -> str:
-        result = self.run_tool("ipp_pool.py", "sync", timeout=90)
+        # --include-locked keeps rollout-locked countries in exits.json so the
+        # region picker can offer them; _node_usable() decides what counts as
+        # available.
+        result = self.run_tool("ipp_pool.py", "sync", "--include-locked", timeout=90)
         if result.returncode != 0:
             raise BridgeError(safe_tail(result.stderr or result.stdout, 500) or "节点同步失败。")
         return safe_tail(result.stdout, 800)
@@ -204,9 +241,12 @@ class PoolManager:
 
     @staticmethod
     def _node_usable(node: dict[str, Any]) -> bool:
+        # `locked` is Mozilla's gradual-rollout flag, not a technical outage:
+        # locked exits use the same Fastly MASQUE infrastructure and the same
+        # per-account JWT as unlocked ones, so expose them as available too.
+        # Quarantined servers are real removals and stay excluded.
         return (
             not bool(node.get("quarantined"))
-            and not bool(node.get("locked"))
             and bool(node.get("supported", True))
             and str(node.get("protocol") or "connect").lower() == "connect"
             and bool(str(node.get("hostname") or "").strip())
@@ -389,18 +429,62 @@ class PoolManager:
             raise BridgeError("所选地区当前没有可用节点，请换一个地区。")
         return resolved, locations, ranked
 
+    @staticmethod
+    def _credential_values_valid(email: Any, uid: Any, session_token: Any) -> bool:
+        return (
+            isinstance(email, str)
+            and len(email) <= 320
+            and re.fullmatch(r"[^\s@]+@[^\s@]+", email) is not None
+            and isinstance(uid, str)
+            and 0 < len(uid) <= 256
+            and not any(ch.isspace() for ch in uid)
+            and isinstance(session_token, str)
+            and 0 < len(session_token) <= 4096
+            and not any(ch.isspace() for ch in session_token)
+        )
+
     def credentials_present(self) -> bool:
+        """Return true only when refresh_tokens.py can load a real credential bundle."""
         tokens = UPSTREAM / "tokens"
         if not tokens.is_dir():
             return False
-        names = {p.name.lower() for p in tokens.iterdir() if p.is_file()}
-        return any("renewal" in name and "credential" in name for name in names) or "session_token.txt" in names
+        canonical = tokens / "renewal_credentials.json"
+        if canonical.is_file():
+            try:
+                if canonical.stat().st_size > 16 * 1024:
+                    return False
+                data = json.loads(canonical.read_text(encoding="utf-8"))
+                return (
+                    isinstance(data, dict)
+                    and data.get("schema") == 1
+                    and self._credential_values_valid(
+                        data.get("email"), data.get("uid"), data.get("session_token")
+                    )
+                )
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                return False
+
+        metadata_path = tokens / "account_meta.json"
+        session_path = tokens / "session_token.txt"
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            session_token = session_path.read_text(encoding="utf-8").strip()
+            return (
+                isinstance(metadata, dict)
+                and self._credential_values_valid(
+                    metadata.get("email"), metadata.get("uid"), session_token
+                )
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return False
 
     def start(self, country: str) -> dict[str, Any]:
         with self.lock:
             self.prerequisites()
             country = normalize_country(country)
             self.stop()
+            if port_open(SOCKS_HOST, SOCKS_PORT):
+                raise BridgeError("本地 SOCKS5 端口 1090 已被其他程序占用，请关闭冲突的代理后重试。")
             # The server list is cached by locations(); avoid a forced network sync on every toggle.
             self.locations(force=False)
 
@@ -414,56 +498,129 @@ class PoolManager:
                 str(UPSTREAM / "ipp_pool.py"),
                 "run",
                 "--rotator", f"{SOCKS_HOST}:{SOCKS_PORT}",
-                "--http-rotator", "off",
+                "--http-rotator", f"{SOCKS_HOST}:{HTTP_ROTATOR_PORT}",
                 "--rotate-mode", "rr",
                 "--countries", resolved_country,
                 "--limit", str(MAX_FAST_BACKENDS),
                 "--no-http",
+                "--include-locked",
             ]
             child_env = upstream_env()
             child_env["IPP_PREFERRED_HOSTS"] = ",".join(preferred_hosts)
-            child_env["IPP_STICKY_PRIMARY"] = "1"
+            # The pool's stdout is redirected to a file; without this the
+            # child block-buffers its output and a killed attempt loses the
+            # "[!] token not ready" lines that failure classification needs.
+            child_env["PYTHONUNBUFFERED"] = "1"
+            # Do not set IPP_STICKY_PRIMARY here. The aggregate rotator must
+            # advance to the next ranked exit after a transient backend error;
+            # pinning the first three exits makes a single bad rollout look
+            # like a dead local proxy.
 
             POOL_LOG.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                POOL_LOG.write_text("", encoding="utf-8")
-            except OSError:
-                pass
-            log_handle = open(POOL_LOG, "a", encoding="utf-8", buffering=1)
-            try:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    cwd=UPSTREAM,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log_handle,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    env=child_env,
-                )
-                self._job_handle = _create_kill_on_close_job_for_process(self.proc)
-            except OSError as exc:
-                log_handle.close()
-                self.proc = None
-                raise BridgeError("无法启动 Firefox IP 保护本地代理。") from exc
-            finally:
+            # A Guardian 451 means the current network egress is temporarily
+            # ineligible; those windows come and go within minutes. Retry the
+            # bootstrap inside a time budget instead of failing after one hit.
+            retry_deadline = time.monotonic() + STARTUP_RETRY_DEADLINE_SECONDS
+            attempt = 0
+            # Cumulative classification evidence across attempts: the final
+            # attempt can be killed mid-flight with an empty log, so the last
+            # snapshot alone must not decide the reported failure reason.
+            restricted_seen = False
+            token_not_ready_seen = False
+            while True:
+                attempt += 1
                 try:
-                    log_handle.close()
-                except Exception:
+                    POOL_LOG.write_text("", encoding="utf-8")
+                except OSError:
                     pass
+                log_handle = open(POOL_LOG, "a", encoding="utf-8", buffering=1)
+                try:
+                    self.proc = subprocess.Popen(
+                        cmd,
+                        cwd=UPSTREAM,
+                        stdin=subprocess.DEVNULL,
+                        stdout=log_handle,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        env=child_env,
+                    )
+                    self._job_handle = _create_kill_on_close_job_for_process(self.proc)
+                except OSError as exc:
+                    log_handle.close()
+                    self.proc = None
+                    raise BridgeError("无法启动 Firefox IP 保护本地代理。") from exc
+                finally:
+                    try:
+                        log_handle.close()
+                    except Exception:
+                        pass
 
-            self.country = country
-            self.resolved_country = resolved_country
-            if not wait_for_port(SOCKS_HOST, SOCKS_PORT, self.proc, timeout=28):
+                self.country = country
+                self.resolved_country = resolved_country
+                wait_timeout = STARTUP_TIMEOUT_SECONDS if attempt == 1 else max(
+                    1.0, min(STARTUP_TIMEOUT_SECONDS, retry_deadline - time.monotonic())
+                )
+                if wait_for_port(SOCKS_HOST, SOCKS_PORT, self.proc, timeout=wait_timeout):
+                    break
+
                 code = self.proc.poll() if self.proc else None
                 tail = read_log_tail(POOL_LOG, 900)
                 self.stop()
                 lowered = tail.lower()
                 if "no listeners started" in lowered or "exported 0 nodes" in lowered:
                     raise BridgeError("所选地区当前没有可用节点，请换一个地区。")
+
+                state_result, state_status, state_retry_at = refresh_state_summary()
+                restricted_seen = restricted_seen or bool(
+                    state_status == 451
+                    or state_result == "service_restricted"
+                    or "http 451" in lowered
+                    or "http=451" in lowered
+                    or "service_restricted" in lowered
+                )
+                token_not_ready_seen = token_not_ready_seen or bool(
+                    "token not ready" in lowered
+                    or "backoff" in lowered
+                    or restricted_seen
+                    or state_result in {"service_restricted", "transient_error", "protocol_error", "rate_limited"}
+                )
+                remaining_budget = retry_deadline - time.monotonic()
+                # A persisted cooldown longer than the remaining budget makes
+                # further retries pure waiting; likewise a new attempt needs a
+                # minimum budget or it will be killed before producing evidence.
+                cooldown_fits = not isinstance(state_retry_at, float) or (
+                    state_retry_at - time.time() <= remaining_budget
+                )
+                can_retry = (
+                    token_not_ready_seen
+                    and remaining_budget >= STARTUP_MIN_ATTEMPT_BUDGET_SECONDS
+                    and cooldown_fits
+                )
+                if can_retry:
+                    time.sleep(min(STARTUP_RETRY_DELAY_SECONDS, max(0.0, remaining_budget)))
+                    if port_open(SOCKS_HOST, SOCKS_PORT):
+                        raise BridgeError("本地 SOCKS5 端口 1090 已被其他程序占用，请关闭冲突的代理后重试。")
+                    continue
+                if restricted_seen:
+                    raise BridgeError(
+                        "Mozilla 拒绝了当前网络出口的令牌请求（HTTP 451，与账户无关）。"
+                        "通常是当前网络出口暂时不在支持地区：请稍后重试；隧道建立后续期会自动改走出口。"
+                        "如反复出现，可将可用的 HTTP 代理写入 runtime 的 tokens/refresh_proxy.txt。"
+                    )
+                if token_not_ready_seen:
+                    raise BridgeError(
+                        "Mozilla 凭据刷新暂时失败（网络出口不可达或处于冷却期）。请稍后重试；"
+                        "如反复出现，请检查本机网络，或将可用的 HTTP 代理写入 runtime 的 tokens/refresh_proxy.txt。"
+                    )
                 if code is not None:
                     raise BridgeError(f"代理进程提前退出（code {code}）。请刷新地区列表后重试。")
-                raise BridgeError("本地 SOCKS5 端口未能启动，请稍后重试。")
+                raise BridgeError("本地 SOCKS5 代理未能完成上游连接，请稍后重试。")
+
+            # wait_for_port() already completed a successful end-to-end probe;
+            # let the cached verdict satisfy the immediate status check.
+            self._last_probe_ok = True
+            self._last_probe_ts = time.time()
 
             return {
                 "running": True, "country": country, "resolvedCountry": resolved_country, "port": SOCKS_PORT,
@@ -492,19 +649,39 @@ class PoolManager:
                         pass
             finally:
                 _close_job_handle(job)
+                self._last_probe_ok = False
+                self._last_probe_ts = 0.0
 
     def status(self) -> dict[str, Any]:
-        running = bool(self.proc and self.proc.poll() is None and port_open(SOCKS_HOST, SOCKS_PORT))
-        return {
-            "available": UPSTREAM.joinpath("ipp_pool.py").is_file() and PACKAGES_DIR.is_dir() and SYSTEM_PYTHON_FILE.is_file(),
-            "running": running,
-            "credentials": self.credentials_present(),
-            "country": self.country,
-            "resolvedCountry": self.resolved_country,
-            "port": SOCKS_PORT,
-            "installRoot": str(PROJECT_ROOT),
-            "bridgeVersion": BRIDGE_VERSION,
-        }
+        with self.lock:
+            port_is_open = port_open(SOCKS_HOST, SOCKS_PORT)
+            running = bool(self.proc and self.proc.poll() is None and port_is_open)
+            healthy = False
+            if running:
+                now = time.time()
+                if now - self._last_probe_ts >= STATUS_PROBE_TTL_SECONDS:
+                    try:
+                        socks5_connect_probe_any(SOCKS_HOST, SOCKS_PORT)
+                        self._last_probe_ok = True
+                    except OSError:
+                        self._last_probe_ok = False
+                    self._last_probe_ts = now
+                healthy = self._last_probe_ok
+            else:
+                self._last_probe_ok = False
+                self._last_probe_ts = 0.0
+            return {
+                "available": UPSTREAM.joinpath("ipp_pool.py").is_file() and PACKAGES_DIR.is_dir() and SYSTEM_PYTHON_FILE.is_file(),
+                "running": running,
+                "healthy": healthy,
+                "portOpen": port_is_open,
+                "credentials": self.credentials_present(),
+                "country": self.country,
+                "resolvedCountry": self.resolved_country,
+                "port": SOCKS_PORT,
+                "installRoot": str(PROJECT_ROOT),
+                "bridgeVersion": BRIDGE_VERSION,
+            }
 
     def usage(self) -> str:
         result = self.run_tool("ipp_pool.py", "usage", timeout=85)
@@ -754,6 +931,30 @@ def read_log_tail(path: Path, max_chars: int) -> str:
     return safe_tail(text, max_chars)
 
 
+def refresh_state_summary() -> tuple[str | None, int | None, float | None]:
+    """Read the sanitized renewal state (result, http_status, next_attempt_at).
+
+    The state file deliberately contains no secret material, and a killed
+    pool loses its buffered stdout — the persisted state is the reliable
+    signal for classifying a failed bootstrap.
+    """
+    path = UPSTREAM / "tokens" / "refresh_state.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None, None, None
+    if not isinstance(data, dict):
+        return None, None, None
+    result = data.get("result")
+    status = data.get("http_status")
+    retry_at = data.get("next_attempt_at")
+    return (
+        str(result) if isinstance(result, str) else None,
+        int(status) if isinstance(status, int) and 100 <= status <= 599 else None,
+        float(retry_at) if isinstance(retry_at, (int, float)) else None,
+    )
+
+
 def port_open(host: str, port: int) -> bool:
     try:
         with socket.create_connection((host, port), timeout=0.35):
@@ -762,13 +963,79 @@ def port_open(host: str, port: int) -> bool:
         return False
 
 
+def _recv_exact_socket(sock: socket.socket, size: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = size
+    while remaining:
+        chunk = sock.recv(remaining)
+        if not chunk:
+            raise OSError("SOCKS5 listener closed during readiness probe")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def socks5_connect_probe(
+    host: str,
+    port: int,
+    target_host: str = SOCKS_PROBE_HOST,
+    target_port: int = SOCKS_PROBE_PORT,
+) -> None:
+    """Verify the aggregate listener can complete a real upstream CONNECT."""
+    target = str(target_host).encode("idna")
+    if not target or len(target) > 255 or not 1 <= int(target_port) <= 65535:
+        raise OSError("invalid SOCKS5 readiness target")
+    with socket.create_connection((host, port), timeout=SOCKS_PROBE_TIMEOUT) as client:
+        client.settimeout(SOCKS_PROBE_TIMEOUT)
+        client.sendall(b"\x05\x01\x00")
+        if _recv_exact_socket(client, 2) != b"\x05\x00":
+            raise OSError("SOCKS5 listener rejected unauthenticated handshake")
+        client.sendall(
+            b"\x05\x01\x00\x03"
+            + bytes([len(target)])
+            + target
+            + struct.pack("!H", int(target_port))
+        )
+        reply = _recv_exact_socket(client, 4)
+        if reply[0] != 5 or reply[1] != 0:
+            raise OSError(f"SOCKS5 upstream CONNECT failed (code {reply[1] if reply else 'unknown'})")
+        atyp = reply[3]
+        if atyp == 1:
+            _recv_exact_socket(client, 4)
+        elif atyp == 3:
+            length = _recv_exact_socket(client, 1)[0]
+            _recv_exact_socket(client, length)
+        elif atyp == 4:
+            _recv_exact_socket(client, 16)
+        else:
+            raise OSError("SOCKS5 listener returned an invalid address type")
+        _recv_exact_socket(client, 2)
+
+
+def socks5_connect_probe_any(host: str, port: int) -> None:
+    """Try independent public targets so one blocked destination is not fatal."""
+    last_error: OSError | None = None
+    for target_host, target_port in SOCKS_PROBE_TARGETS:
+        try:
+            socks5_connect_probe(host, port, target_host, target_port)
+            return
+        except OSError as exc:
+            last_error = exc
+    raise OSError(f"SOCKS5 upstream probes failed: {last_error or 'unknown error'}")
+
+
 def wait_for_port(host: str, port: int, proc: subprocess.Popen[Any] | None, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if proc and proc.poll() is not None:
             return False
         if port_open(host, port):
-            return True
+            try:
+                socks5_connect_probe_any(host, port)
+            except OSError:
+                pass
+            else:
+                return True
         time.sleep(0.25)
     return False
 

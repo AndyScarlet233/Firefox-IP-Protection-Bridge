@@ -52,7 +52,14 @@ from renewal_credentials import (
     RenewalCredentialsError,
     load_renewal_credentials,
 )
-from refresh_state import load_refresh_state, record_refresh_state, refresh_lock, retry_delay
+from refresh_state import (
+    describe_refresh_proxy,
+    load_refresh_state,
+    record_refresh_state,
+    refresh_lock,
+    resolve_refresh_proxy,
+    retry_delay,
+)
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -68,6 +75,7 @@ RENEWAL_BLOCK_RESULTS = {
     "rate_limited",
     "reauth_required",
     "no_entitlement",
+    "service_restricted",
 }
 
 DEFAULT_GUARDIAN = "https://vpn.mozilla.org"
@@ -81,6 +89,9 @@ DEFAULT_BIND = "127.0.0.1"
 DEFAULT_ROTATOR = "127.0.0.1:1090"
 DEFAULT_HTTP_ROTATOR = "127.0.0.1:8080"
 DEFAULT_FIREFOX_VERSION = "155.0a1"
+# A long cache keeps pool startup from blocking on a Remote Settings fetch;
+# the native bridge controls freshness via its own sync schedule.
+SERVERLIST_CACHE_SECONDS = 86400
 MAX_FORWARD_BODY = 8 * 1024 * 1024
 MAX_PROBE_RESPONSE = 64 * 1024
 # refresh_tokens.py bounds Guardian work to 30 seconds and gives each PyFxA
@@ -851,9 +862,14 @@ class TokenStore:
                 now = time.time()
                 if next_attempt is not None and next_attempt > now:
                     wait = max(1, int(next_attempt - now))
-                    raise RuntimeError(
-                        f"automatic renewal is paused ({result}); retry in {wait}s"
-                    )
+                    messages = {
+                        "reauth_required": "Firefox Account session requires re-authentication; import Firefox credentials again",
+                        "no_entitlement": "Firefox IP Protection is not available for this account",
+                        "service_restricted": "Firefox IP Protection is restricted for this account or region",
+                        "rate_limited": "Firefox IP Protection refresh is rate-limited",
+                    }
+                    reason = messages.get(result, f"automatic renewal is paused ({result})")
+                    raise RuntimeError(f"{reason}; retry in {wait}s")
                 recover_blocked_state = True
             elif self._usable_unlocked():
                 return self._proxy_pass or ""
@@ -1079,6 +1095,7 @@ class TokenStore:
                 "missing_credentials": "missing Firefox renewal credentials for Guardian usage query",
                 "reauth_required": "Firefox Account session requires re-authentication for Guardian usage query",
                 "oauth_rate_limited": "Firefox Account OAuth usage query was rate-limited",
+                "service_restricted": "Firefox IP Protection service is restricted for this account or region",
                 "transient_error": "temporary Firefox Account/Guardian usage query failure",
             }
             raise RuntimeError(messages.get(code, "Guardian usage helper failed"))
@@ -1135,9 +1152,19 @@ class TokenStore:
             headers=guardian_headers(fxa_token),
             method="GET",
         )
+        # Same egress rule as the refresh helper: prefer an eligible proxy so
+        # Guardian region checks do not fail the renewal on a bad local route.
+        proxy_url = resolve_refresh_proxy()
+        print(f"[*] refresh egress: {describe_refresh_proxy(proxy_url)}")
+        if proxy_url:
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+            )
+        else:
+            opener = urllib.request.build_opener()
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(request, timeout=30) as response:
+                with opener.open(request, timeout=30) as response:
                     status = getattr(response, "status", 200)
                     with self._lock:
                         self.last_status = status
@@ -1190,6 +1217,14 @@ class TokenStore:
                         f"Guardian token request failed with HTTP {exc.code}",
                         http_status=exc.code,
                         delay=60,
+                    )
+                    return None
+                if exc.code == 451:
+                    self._record_failure(
+                        "service_restricted",
+                        "Firefox IP Protection service is restricted for this account or region",
+                        http_status=exc.code,
+                        delay=max(60, retry_after or 0),
                     )
                     return None
                 if 500 <= exc.code < 600 and retry_after is not None:
@@ -1400,14 +1435,23 @@ class TokenStore:
             # or mishandle the quota headers.
             method="GET",
         )
+        proxy_url = resolve_refresh_proxy()
+        print(f"[*] usage egress: {describe_refresh_proxy(proxy_url)}")
+        if proxy_url:
+            usage_opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+            )
+        else:
+            usage_opener = urllib.request.build_opener()
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with usage_opener.open(req, timeout=30) as resp:
                 with self._lock:
                     self.last_status = getattr(resp, "status", 200)
-                self._set_usage(resp.headers, require_quota=True)
-                # Consume and discard the ProxyPass body. The usage command
-                # must never expose or persist the short-lived token.
+                # Consume and discard the body immediately: it carries the
+                # short-lived ProxyPass token, which the usage command must
+                # never expose or persist.
                 resp.read()
+                self._set_usage(resp.headers, require_quota=True)
         except urllib.error.HTTPError as exc:
             retry_after = _retry_after_seconds(
                 exc.headers.get("Retry-After") if exc.headers else None
@@ -1781,13 +1825,14 @@ def fetch_serverlist(
         if raw is None:
             raise ValueError("no cached vpn-serverlist")
         parsed = parse_serverlist(raw, firefox_version, client_country, include_locked)
-        if not any(node.supported and not node.locked for node in parsed):
+        usable = [n for n in parsed if n.supported and (not n.locked or include_locked)]
+        if not usable:
             raise ValueError("vpn-serverlist contains no usable CONNECT nodes")
         return parsed
 
     if cached is not None and not force:
         fetched_at = float(metadata.get("fetched_at") or SERVERLIST_CACHE.stat().st_mtime)
-        if time.time() - fetched_at < 3600:
+        if time.time() - fetched_at < SERVERLIST_CACHE_SECONDS:
             try:
                 return parse_and_validate(cached)
             except ValueError:
@@ -2632,7 +2677,9 @@ class Pool:
             n
             for n in self.nodes
             if not n.quarantined
-            and (not n.locked or (self.include_locked and n.filter_matched))
+            # With --include-locked, rollout-locked exits are offered the same
+            # as unlocked ones; the picker and the runner must agree on that.
+            and (not n.locked or self.include_locked)
             and n.supported
             and n.protocol == "connect"
         ]
