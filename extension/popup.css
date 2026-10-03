@@ -86,6 +86,21 @@ button { color: inherit; }
 .domain-item button:hover { background: #f3f3f5; color: var(--danger); }
 .empty { padding: 9px 0 2px; color: #85858d; font-size: 11px; }
 .detail { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #63636b; word-break: break-word; }
+/* Quiet reminder that the imported Mozilla token only refreshes while Firefox runs. */
+.credential-freshness { margin-top: 3px; font-size: 10.5px; color: #85858d; }
+.credential-freshness.warn { color: #a06000; }
+.credential-freshness.bad { color: #c5221f; }
+/* Rule export/import: a textarea with pill buttons, so "导出 -> 粘贴 -> 导入"
+   is one straight flow and the text can be copied by hand if needed. */
+.rule-transfer { display: flex; gap: 8px; margin-top: 9px; }
+.transfer-button { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: #e8f0fe; color: #0b57d0; cursor: pointer; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.transfer-button:hover { background: #d3e3fd; }
+.transfer-button:disabled { opacity: .55; cursor: default; }
+.t-icon { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rule-import { margin-top: 8px; }
+.rule-import-box { width: 100%; height: 128px; padding: 9px 10px; border: 1px solid #e3e3e8; border-radius: 8px; background: #f6f6f8; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; line-height: 1.5; color: #32323a; resize: vertical; box-sizing: border-box; }
+.rule-import-box:focus { outline: none; background: #fff; border-color: #0b57d0; box-shadow: 0 0 0 2px rgba(11,87,208,.14); }
+.rule-import-actions { display: flex; gap: 8px; margin-top: 8px; }
 .link-button { border: 0; background: transparent; color: #0060df; cursor: pointer; font-size: 11.5px; font-weight: 700; }
 .ondemand { padding: 3px 7px; border-radius: 999px; background: #e6f8eb; color: #007a31; font-size: 10px; font-weight: 750; }
 .path-button { width: 100%; height: 34px; margin-top: 8px; padding: 0 8px; border: 1px solid #dddde2; border-radius: 6px; background: #f8f8fa; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; color: #55555d; }

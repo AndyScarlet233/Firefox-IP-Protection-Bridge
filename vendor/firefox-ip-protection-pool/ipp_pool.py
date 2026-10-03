@@ -52,14 +52,7 @@ from renewal_credentials import (
     RenewalCredentialsError,
     load_renewal_credentials,
 )
-from refresh_state import (
-    describe_refresh_proxy,
-    load_refresh_state,
-    record_refresh_state,
-    refresh_lock,
-    resolve_refresh_proxy,
-    retry_delay,
-)
+from refresh_state import load_refresh_state, record_refresh_state, refresh_lock, retry_delay
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -75,7 +68,6 @@ RENEWAL_BLOCK_RESULTS = {
     "rate_limited",
     "reauth_required",
     "no_entitlement",
-    "service_restricted",
 }
 
 DEFAULT_GUARDIAN = "https://vpn.mozilla.org"
@@ -89,9 +81,6 @@ DEFAULT_BIND = "127.0.0.1"
 DEFAULT_ROTATOR = "127.0.0.1:1090"
 DEFAULT_HTTP_ROTATOR = "127.0.0.1:8080"
 DEFAULT_FIREFOX_VERSION = "155.0a1"
-# A long cache keeps pool startup from blocking on a Remote Settings fetch;
-# the native bridge controls freshness via its own sync schedule.
-SERVERLIST_CACHE_SECONDS = 86400
 MAX_FORWARD_BODY = 8 * 1024 * 1024
 MAX_PROBE_RESPONSE = 64 * 1024
 # refresh_tokens.py bounds Guardian work to 30 seconds and gives each PyFxA
@@ -862,14 +851,9 @@ class TokenStore:
                 now = time.time()
                 if next_attempt is not None and next_attempt > now:
                     wait = max(1, int(next_attempt - now))
-                    messages = {
-                        "reauth_required": "Firefox Account session requires re-authentication; import Firefox credentials again",
-                        "no_entitlement": "Firefox IP Protection is not available for this account",
-                        "service_restricted": "Firefox IP Protection is restricted for this account or region",
-                        "rate_limited": "Firefox IP Protection refresh is rate-limited",
-                    }
-                    reason = messages.get(result, f"automatic renewal is paused ({result})")
-                    raise RuntimeError(f"{reason}; retry in {wait}s")
+                    raise RuntimeError(
+                        f"automatic renewal is paused ({result}); retry in {wait}s"
+                    )
                 recover_blocked_state = True
             elif self._usable_unlocked():
                 return self._proxy_pass or ""
@@ -1095,7 +1079,6 @@ class TokenStore:
                 "missing_credentials": "missing Firefox renewal credentials for Guardian usage query",
                 "reauth_required": "Firefox Account session requires re-authentication for Guardian usage query",
                 "oauth_rate_limited": "Firefox Account OAuth usage query was rate-limited",
-                "service_restricted": "Firefox IP Protection service is restricted for this account or region",
                 "transient_error": "temporary Firefox Account/Guardian usage query failure",
             }
             raise RuntimeError(messages.get(code, "Guardian usage helper failed"))
@@ -1152,19 +1135,9 @@ class TokenStore:
             headers=guardian_headers(fxa_token),
             method="GET",
         )
-        # Same egress rule as the refresh helper: prefer an eligible proxy so
-        # Guardian region checks do not fail the renewal on a bad local route.
-        proxy_url = resolve_refresh_proxy()
-        print(f"[*] refresh egress: {describe_refresh_proxy(proxy_url)}")
-        if proxy_url:
-            opener = urllib.request.build_opener(
-                urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-            )
-        else:
-            opener = urllib.request.build_opener()
         for attempt in range(3):
             try:
-                with opener.open(request, timeout=30) as response:
+                with urllib.request.urlopen(request, timeout=30) as response:
                     status = getattr(response, "status", 200)
                     with self._lock:
                         self.last_status = status
@@ -1217,14 +1190,6 @@ class TokenStore:
                         f"Guardian token request failed with HTTP {exc.code}",
                         http_status=exc.code,
                         delay=60,
-                    )
-                    return None
-                if exc.code == 451:
-                    self._record_failure(
-                        "service_restricted",
-                        "Firefox IP Protection service is restricted for this account or region",
-                        http_status=exc.code,
-                        delay=max(60, retry_after or 0),
                     )
                     return None
                 if 500 <= exc.code < 600 and retry_after is not None:
@@ -1430,26 +1395,12 @@ class TokenStore:
         req = urllib.request.Request(
             f"{self.guardian}/api/v1/fpn/token",
             headers=guardian_headers(fxa_token),
-            # Firefox queries the token endpoint with GET and reads the quota
-            # headers from that response. Some CDN paths accept HEAD but omit
-            # or mishandle the quota headers.
             method="GET",
         )
-        proxy_url = resolve_refresh_proxy()
-        print(f"[*] usage egress: {describe_refresh_proxy(proxy_url)}")
-        if proxy_url:
-            usage_opener = urllib.request.build_opener(
-                urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-            )
-        else:
-            usage_opener = urllib.request.build_opener()
         try:
-            with usage_opener.open(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 with self._lock:
                     self.last_status = getattr(resp, "status", 200)
-                # Consume and discard the body immediately: it carries the
-                # short-lived ProxyPass token, which the usage command must
-                # never expose or persist.
                 resp.read()
                 self._set_usage(resp.headers, require_quota=True)
         except urllib.error.HTTPError as exc:
@@ -1825,14 +1776,13 @@ def fetch_serverlist(
         if raw is None:
             raise ValueError("no cached vpn-serverlist")
         parsed = parse_serverlist(raw, firefox_version, client_country, include_locked)
-        usable = [n for n in parsed if n.supported and (not n.locked or include_locked)]
-        if not usable:
+        if not any(node.supported and not node.locked for node in parsed):
             raise ValueError("vpn-serverlist contains no usable CONNECT nodes")
         return parsed
 
     if cached is not None and not force:
         fetched_at = float(metadata.get("fetched_at") or SERVERLIST_CACHE.stat().st_mtime)
-        if time.time() - fetched_at < SERVERLIST_CACHE_SECONDS:
+        if time.time() - fetched_at < 3600:
             try:
                 return parse_and_validate(cached)
             except ValueError:
@@ -2671,15 +2621,14 @@ class Pool:
         limit: int | None = None,
         countries: set[str] | None = None,
         recommended: bool = False,
+        exclude_hosts: set[str] | None = None,
     ) -> list[RunningNode]:
         selected: list[ExitNode] = []
         eligible = [
             n
             for n in self.nodes
             if not n.quarantined
-            # With --include-locked, rollout-locked exits are offered the same
-            # as unlocked ones; the picker and the runner must agree on that.
-            and (not n.locked or self.include_locked)
+            and (not n.locked or (self.include_locked and n.filter_matched))
             and n.supported
             and n.protocol == "connect"
         ]
@@ -2690,6 +2639,14 @@ class Pool:
             selected = [n for n in eligible if n.country.upper() == "REC"]
         else:
             selected = [n for n in eligible if n.country.upper() != "REC"]
+        # Hard exclusion, applied after country selection. Country codes alone are
+        # not enough: a shared anycast exit is filed under a rollout country but
+        # egresses from whatever Fastly POP answers, so the advertised country
+        # would drift. IPP_PREFERRED_HOSTS only reorders; this removes.
+        if exclude_hosts:
+            blocked = {h.strip().lower() for h in exclude_hosts if h and h.strip()}
+            if blocked:
+                selected = [n for n in selected if n.hostname.lower() not in blocked]
         preferred_hosts = [h.strip().lower() for h in os.environ.get("IPP_PREFERRED_HOSTS", "").split(",") if h.strip()]
         preferred_rank = {host: idx for idx, host in enumerate(preferred_hosts)}
         selected.sort(key=lambda node: (
@@ -2761,8 +2718,9 @@ class Pool:
         limit: int | None = None,
         countries: set[str] | None = None,
         recommended: bool = False,
+        exclude_hosts: set[str] | None = None,
     ) -> list[RunningNode]:
-        return self._start(limit=limit, countries=countries, recommended=recommended)
+        return self._start(limit=limit, countries=countries, recommended=recommended, exclude_hosts=exclude_hosts)
 
     def start_rotator(self, listen: str = DEFAULT_ROTATOR, mode: str = "random") -> ThreadedSocksServer:
         with self._lifecycle_lock:
@@ -3356,7 +3314,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         advertise_host=public_ip,
         include_locked=args.include_locked,
     )
-    pool.start(limit=args.limit, countries=countries, recommended=args.recommended)
+    exclude_hosts: set[str] = set()
+    if getattr(args, "exclude_hosts", None):
+        exclude_hosts = {h.strip().lower() for h in args.exclude_hosts.split(",") if h.strip()}
+    pool.start(limit=args.limit, countries=countries, recommended=args.recommended, exclude_hosts=exclude_hosts)
     if not pool.running:
         print("[!] no listeners started", file=sys.stderr)
         return 1
@@ -3408,6 +3369,11 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--http-base", type=int, default=defaults)
         sp.add_argument("--limit", type=int, default=defaults)
         sp.add_argument("--countries", default=defaults)
+        sp.add_argument(
+            "--exclude-hosts",
+            default=defaults,
+            help="comma-separated hostnames to drop after country selection (e.g. shared anycast exits)",
+        )
         sp.add_argument("--no-socks", action="store_true", default=defaults)
         sp.add_argument("--no-http", action="store_true", default=defaults)
         sp.add_argument("--rotator", default=defaults)

@@ -102,11 +102,24 @@
         <div class="add-domain"><input id="domainInput" type="text" inputmode="url" placeholder="example.com"><button id="addDomain">添加</button></div>
         <div id="domainList" class="domain-list"><div class="empty">还没有网站</div></div>
         <p class="help">规则包含该域名及其子域名；ChatGPT、Claude、Bilibili 等已知站点族会自动扩展核心域名。未识别的第三方 CDN 仍需单独添加。</p>
+        <div class="rule-transfer">
+          <button id="toggleRuleImport" class="transfer-button" aria-expanded="false" aria-controls="ruleImportPanel"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>导入</button>
+          <button id="copyRules" class="transfer-button" aria-controls="ruleImportText"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9m0 0 4 4m-4-4-4 4"/><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg>导出</button>
+        </div>
+        <div id="ruleImportPanel" class="rule-import" hidden>
+          <textarea id="ruleImportText" class="rule-import-box" spellcheck="false" placeholder="粘贴域名列表，每行一个；也支持 JSON 数组格式。"></textarea>
+          <div class="rule-import-actions">
+            <button id="copyFromBox" class="transfer-button" title="复制文本框内容"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>复制</button>
+            <button id="confirmRuleImport" class="transfer-button" title="把文本框内容合并进当前列表"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>导入</button>
+            <button id="clearRuleImport" class="transfer-button" title="清空文本框"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>清空</button>
+          </div>
+        </div>
       </div>
 
       <div class="setting-block compact">
         <div class="setting-head"><span class="setting-label">Mozilla 账户</span><button id="importFirefox" class="small-button">从 Firefox 导入</button></div>
         <div id="credentialStatus" class="detail">正在检查…</div>
+        <div id="credentialFreshness" class="detail credential-freshness" hidden></div>
       </div>
 
       <div class="setting-block compact">

@@ -24,6 +24,14 @@ const domainInput = $("domainInput");
 const addDomain = $("addDomain");
 const domainList = $("domainList");
 const credentialStatus = $("credentialStatus");
+const credentialFreshness = $("credentialFreshness");
+const copyRules = $("copyRules");
+const toggleRuleImport = $("toggleRuleImport");
+const copyFromBox = $("copyFromBox");
+const clearRuleImport = $("clearRuleImport");
+const confirmRuleImport = $("confirmRuleImport");
+const ruleImportPanel = $("ruleImportPanel");
+const ruleImportText = $("ruleImportText");
 const importFirefox = $("importFirefox");
 const usageButton = $("usage");
 const usageText = $("usageText");
@@ -86,9 +94,21 @@ function populateLocations(items = []) {
   country.value = optionExists ? previous : "REC";
 }
 
+function sleepMs(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
 async function send(message) {
-  const response = await chrome.runtime.sendMessage(message);
-  if (!response || response.ok === false) throw new Error(response?.error || "操作失败");
+  let response;
+  try {
+    response = await chrome.runtime.sendMessage(message);
+  } catch (_) {
+    // The service worker can be asleep or still starting. Treating that as a
+    // hard failure would surface a bogus error and leave the popup unusable.
+    await sleepMs(400);
+    try { response = await chrome.runtime.sendMessage(message); }
+    catch (_) { throw new Error("后台服务未响应，请重新加载扩展后再试。"); }
+  }
+  if (!response) throw new Error("后台服务没有返回结果。");
+  if (response.ok === false) throw new Error(response.error || "操作失败");
   return response;
 }
 
@@ -172,7 +192,7 @@ function formatUsageText(value) {
 
 function setBusy(value) {
   busy = value;
-  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, openFolder, removeLocal, fullUninstall]) {
+  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, openFolder, removeLocal, fullUninstall, copyRules, toggleRuleImport, confirmRuleImport, copyFromBox, clearRuleImport, ruleImportText]) {
     if (el) el.disabled = value;
   }
 }
@@ -190,9 +210,17 @@ function ruleCoversHost(rule, host) {
   return host === rule || host.endsWith(`.${rule}`);
 }
 
-function siteUsesVpn(domain = activeDomain) {
-  if (!domain) return false;
-  const inList = managedList().some((rule) => ruleCoversHost(rule, domain));
+// The PAC is built from the canonicalized + site-family-expanded domain list in
+// the background service worker. Re-deriving the answer from the raw stored list
+// here used to disagree with it (e.g. "gemini.google.com"/"www.google.com" both
+// fold into "google.com"), which made this toggle show a state opposite to the
+// one Chrome actually applied. Ask the background instead of guessing.
+let activeSiteUsesVpn = null;
+
+function siteUsesVpn() {
+  if (activeSiteUsesVpn !== null) return activeSiteUsesVpn;
+  if (!activeDomain) return false;
+  const inList = managedList().some((rule) => ruleCoversHost(rule, activeDomain));
   return state.proxyMode === "allowlist" ? inList : !inList;
 }
 
@@ -238,6 +266,40 @@ function renderMain() {
   siteToggle.checked = showSiteControls && siteUsesVpn();
   siteRow?.classList.toggle("vpn-on-site", Boolean(showSiteControls && siteToggle.checked));
   siteToggle.disabled = busy || !showSiteControls;
+  renderCredentialFreshness();
+}
+
+// The imported Mozilla session token is only refreshed while Firefox itself is
+// running, so a stale one silently breaks the tunnel later. Keep this to one
+// quiet line instead of a banner, and stay silent while nothing is wrong.
+function renderCredentialFreshness() {
+  if (!credentialFreshness) return;
+  const info = helper?.credential;
+  credentialFreshness.classList.remove("warn", "bad");
+  if (!helper?.credentials) { credentialFreshness.hidden = true; return; }
+  if (!info || info.known !== true) { credentialFreshness.hidden = true; return; }
+
+  const failures = Number(info.failures || 0);
+  const ageHours = typeof info.lastSuccessAgoHours === "number" ? info.lastSuccessAgoHours : null;
+  const refreshHint = "打开一次 Firefox 或重新导入即可刷新。";
+
+  if (failures > 0) {
+    credentialFreshness.textContent = `最近续期失败 ${failures} 次；${refreshHint}`;
+    credentialFreshness.classList.add("bad");
+    credentialFreshness.hidden = false;
+    return;
+  }
+  if (ageHours === null) { credentialFreshness.hidden = true; return; }
+  if (ageHours >= 24 * 14) {
+    credentialFreshness.textContent = `凭据已 ${Math.round(ageHours / 24)} 天未刷新；${refreshHint}`;
+    credentialFreshness.classList.add("warn");
+  } else if (ageHours >= 24 * 3) {
+    credentialFreshness.textContent = `凭据已 ${Math.round(ageHours / 24)} 天未刷新。`;
+    credentialFreshness.classList.add("warn");
+  } else {
+    credentialFreshness.textContent = `凭据 ${Math.max(1, Math.round(ageHours))} 小时前已验证。`;
+  }
+  credentialFreshness.hidden = false;
 }
 
 function renderSettings() {
@@ -405,10 +467,15 @@ async function refreshStatus() {
   showNotice("正在读取 VPN 状态…");
   // Status and locations are independent requests; run them concurrently so
   // the popup is not serialized behind two native-messaging round trips.
+  // A hard deadline matters: setBusy(true) disables every control, so a promise
+  // that never settles would leave the whole popup permanently unclickable.
   const locationsPromise = send({ type: "locations" }).then(
     (response) => ({ ok: true, response }),
     (error) => ({ ok: false, error })
   );
+  const deadline = new Promise((resolve) => setTimeout(
+    () => resolve({ ok: false, error: new Error("可用地区列表加载超时。") }), 12000
+  ));
   try {
     const response = await send({ type: "status" });
     state = { ...state, ...(response.state || {}) };
@@ -417,7 +484,7 @@ async function refreshStatus() {
     regionStatus = response.region || null;
     let locationWarning = "";
     // Keep a useful fallback if the server list cannot be refreshed right now.
-    const locationResult = await locationsPromise;
+    const locationResult = await Promise.race([locationsPromise, deadline]);
     if (locationResult.ok) {
       populateLocations(locationResult.response.locations || []);
     } else {
@@ -427,10 +494,22 @@ async function refreshStatus() {
     country.value = [...country.options].some(o => o.value === (state.country || "REC")) ? (state.country || "REC") : "REC";
     activeDomain = await getActiveDomain();
     currentSite.textContent = activeDomain || "当前页面无法单独设置（仅支持 http/https 网页）";
+    activeSiteUsesVpn = null;
+    if (activeDomain) {
+      try {
+        const route = await send({ type: "routeFor", host: activeDomain });
+        activeSiteUsesVpn = Boolean(route?.usesVpn);
+      } catch (_) { activeSiteUsesVpn = null; }
+    }
     installPath.textContent = helper.installRoot || "未返回安装位置";
     installPath.title = helper.installRoot || "";
     credentialStatus.textContent = helper.credentials ? "已导入，可自动续期访问凭据" : (helper.available ? "尚未导入 Firefox 登录状态" : "本地桥接程序不可用");
-    if (response.helperError) showNotice(response.helperError, "error");
+    // While the background still owes an auto-connect for this session, the
+    // last error is expected to be transient. Say what is happening instead of
+    // surfacing a red failure the user cannot act on.
+    const autoConnectRetrying = !state.enabled && state.autoConnect && state.autoConnectPending;
+    if (autoConnectRetrying) showNotice("自动连接尚未完成，正在后台自动重试；也可以点上方按钮立即连接。");
+    else if (response.helperError) showNotice(response.helperError, "error");
     else if (state.lastError) showNotice(state.lastError, "error");
     else if (locationWarning) showNotice(locationWarning, "error");
     else showNotice("");
@@ -446,6 +525,11 @@ async function refreshStatus() {
     renderMain();
   }
 }
+
+// Last-resort guard: nothing in the popup may stay disabled. setBusy(true)
+// gates every control, so a single un-awaited await used to be able to leave
+// the whole panel dead with no visible cause.
+setInterval(() => { if (busy) setBusy(false); }, 15000);
 
 power.addEventListener("click", async () => {
   if (busy) return;
@@ -519,7 +603,18 @@ siteToggle.addEventListener("change", async () => {
     const response = await send({ type: "setSiteRule", domain: activeDomain, useVpn: desired });
     state.allowlist = response.allowlist || state.allowlist;
     state.bypassSites = response.bypassSites || state.bypassSites;
-    showNotice(desired ? `${activeDomain} 将使用 VPN。` : `${activeDomain} 将直接连接。`, "good");
+    // Re-read the authoritative decision so the switch cannot render a state
+    // that differs from the PAC Chrome actually installed.
+    try {
+      const route = await send({ type: "routeFor", host: activeDomain });
+      activeSiteUsesVpn = Boolean(route?.usesVpn);
+    } catch (_) { activeSiteUsesVpn = null; }
+    showNotice(
+      desired
+        ? `${activeDomain} 已改为走 VPN。已打开的页面请刷新后生效。`
+        : `${activeDomain} 已改为直连。已打开的页面请刷新后生效。`,
+      "good"
+    );
   } catch (error) {
     showNotice(error.message, "error");
     await reconcileAfterCommandFailure();
@@ -625,6 +720,85 @@ async function addManaged() {
 }
 addDomain.addEventListener("click", addManaged);
 domainInput.addEventListener("keydown", (event) => { if (event.key === "Enter") addManaged(); });
+
+// Rules live in chrome.storage.local, which never syncs, so moving them
+// between browsers or Chrome profiles is a deliberate copy/paste step.
+// The textarea stays visible so "导出 -> 粘贴 -> 导入" is one straight flow and
+// the text can still be moved by hand when the clipboard is unavailable.
+function setRuleImportOpen(open) {
+  ruleImportPanel.hidden = !open;
+  toggleRuleImport.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) setTimeout(() => ruleImportText.focus(), 0);
+}
+toggleRuleImport.addEventListener("click", () => setRuleImportOpen(ruleImportPanel.hidden));
+
+// Clipboard access can be denied inside a popup document, so every copy also
+// puts the text in the textarea the user can select and copy manually.
+async function putText(text, successMessage) {
+  ruleImportText.value = text;
+  setRuleImportOpen(true);
+  try {
+    await navigator.clipboard.writeText(text);
+    showNotice(successMessage, "good");
+  } catch (_) {
+    showNotice("已生成内容，请手动复制文本框中的文字。", "error");
+  }
+}
+
+copyRules.addEventListener("click", async () => {
+  setBusy(true);
+  try {
+    const response = await send({ type: "exportManagedDomains" });
+    const domains = response.domains || [];
+    if (!domains.length) {
+      showNotice(state.proxyMode === "allowlist" ? "白名单为空，没有可导出的内容。" : "黑名单为空，没有可导出的内容。", "error");
+      return;
+    }
+    const kind = response.mode === "allowlist" ? "白名单（走 VPN）" : "黑名单（直连）";
+    const text = ["# 火狐 VPN " + kind, "# 共 " + domains.length + " 条", ...domains].join("\n");
+    await putText(text, `已复制 ${domains.length} 条规则。`);
+  } catch (error) {
+    showNotice(error.message, "error");
+  } finally { setBusy(false); }
+});
+
+copyFromBox.addEventListener("click", async () => {
+  const text = ruleImportText.value.trim();
+  if (!text) { showNotice("文本框是空的，没有可复制的内容。", "error"); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    showNotice("已复制文本框内容。", "good");
+  } catch (_) {
+    showNotice("无法访问剪贴板，请手动选中并复制。", "error");
+  }
+});
+
+clearRuleImport.addEventListener("click", () => {
+  ruleImportText.value = "";
+  ruleImportText.focus();
+});
+
+ruleImportText.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) confirmRuleImport.click();
+});
+
+confirmRuleImport.addEventListener("click", async () => {
+  const text = ruleImportText.value.trim();
+  if (!text) { showNotice("请先在文本框粘贴要导入的域名列表。", "error"); return; }
+  setBusy(true);
+  try {
+    const response = await send({ type: "importManagedDomains", text });
+    state.allowlist = response.allowlist || [];
+    state.bypassSites = response.bypassSites || [];
+    ruleImportText.value = "";
+    const kind = response.mode === "allowlist" ? "白名单" : "黑名单";
+    showNotice(response.added > 0
+      ? `已合并 ${response.added} 条新规则，${kind}现有 ${response.total} 条。`
+      : `没有新规则，${kind}仍是 ${response.total} 条。`, "good");
+  } catch (error) {
+    showNotice(error.message, "error");
+  } finally { setBusy(false); renderMain(); renderSettings(); }
+});
 
 async function removeDomain(domain) {
   setBusy(true);

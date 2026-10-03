@@ -1,6 +1,10 @@
 const HOST_NAME = "org.firefox_ip_protection.chrome_bridge";
 const PROXY_HOST = "127.0.0.1";
 const PROXY_PORT = 1090;
+// A bare, dot-separated hostname. WHATWG URL is lenient enough to turn prose
+// into punycode, so anything that must be a real rule is checked against this
+// before it can be stored.
+const DOMAIN_SHAPE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 const DEFAULT_STATE = {
   autoConnect: false,
   webRtcLeakProtection: true,
@@ -63,6 +67,17 @@ const SITE_FAMILIES = {
     "im9.com",
     "smtcdns.net",
     "upos-hz-mirrorakam.akamaized.net"
+  ],
+  // IPPure renders its IP card from separate API hosts. In allowlist mode
+  // those hosts must follow the page, otherwise the card reports the direct
+  // local address even though the document itself uses the SOCKS proxy.
+  "ippure.com": [
+    "ippure.com",
+    "api.ippure.com",
+    "ipinfo.io",
+    "v6.ipinfo.io",
+    "ipapi.co",
+    "myip.ipip.net"
   ]
 };
 
@@ -92,6 +107,21 @@ const pending = new Map();
 let lifecycleQueue = Promise.resolve();
 let lifecycleGeneration = 0;
 const expectedNativeDisconnects = new WeakSet();
+
+// Auto-connect used to be a single fire-and-forget attempt at browser startup.
+// A transient bootstrap failure (the local helper's pool process exiting during
+// the first seconds after Chrome launches) therefore left the browser DIRECT
+// for the whole session with no second chance. These two pieces fix that:
+//   - a bounded backoff retry for the startup attempt itself;
+//   - a session-scoped "auto-connect still owed" flag that the health watchdog
+//     picks up, so a failure that outlives the retries still self-heals.
+const AUTO_CONNECT_RETRY_DELAYS_MS = [8000, 20000, 40000];
+// The watchdog keeps trying to honour an outstanding auto-connect for this long
+// after the browser session starts, then gives up instead of retrying forever.
+const AUTO_CONNECT_WATCHDOG_WINDOW_MS = 30 * 60 * 1000;
+// Guards against the retry loop and the watchdog both queueing a start, which
+// would supersede each other through the lifecycle generation counter.
+let autoConnectInFlight = false;
 
 function queueOperation(operation, { invalidateLifecycle = false } = {}) {
   const generation = invalidateLifecycle ? ++lifecycleGeneration : lifecycleGeneration;
@@ -158,6 +188,12 @@ function normalizeDomain(input) {
     throw new Error("这个网站地址看起来无效。");
   }
   if (!value || value.length > 253 || value.includes(" ")) throw new Error("这个网站地址看起来无效。");
+  // WHATWG URL is lenient and happily turns "!!!" into a punycode hostname, so
+  // a pasted text blob would silently become several bogus rules. A real rule
+  // label must have a dot-separated hostname with sane characters.
+  if (!DOMAIN_SHAPE.test(value)) {
+    throw new Error("这个网站地址看起来无效。");
+  }
   return value;
 }
 
@@ -223,14 +259,40 @@ function listCoversHost(list, host) {
   return normalizeDomainArray(list).some((rule) => ruleCoversHost(rule, host));
 }
 
+// A stored rule and a page host can only be compared once both sides have been
+// canonicalized. SITE_FAMILY_ALIASES folds "www.google.com" and
+// "gemini.google.com" into "google.com", so a raw string comparison against a
+// canonical host silently fails and the rule looks like it was never applied.
+function listCoversHostManaged(list, hostInput) {
+  let host = "";
+  try { host = normalizeDomain(hostInput); } catch (_) { return false; }
+  return normalizeManagedDomainArray(list).some((rule) => ruleCoversHost(rule, host));
+}
+
+// Removing a rule must drop every stored spelling that canonicalizes onto the
+// same managed domain, not just the one that matches textually. Otherwise
+// "www.google.com" and "gemini.google.com" would survive one of them and keep
+// the site routed through the tunnel after the user switched it off.
+function removeManagedRule(list, domainInput) {
+  const target = canonicalManagedDomain(domainInput);
+  return normalizeManagedDomainArray(
+    (Array.isArray(list) ? list : []).filter((item) => {
+      let rule = "";
+      try { rule = canonicalManagedDomain(item); } catch (_) { return false; }
+      return !ruleCoversHost(rule, target);
+    })
+  );
+}
+
 async function getStoredState() {
   const [data, runtime] = await Promise.all([
     chrome.storage.local.get(DEFAULT_STATE),
-    chrome.storage.session.get({ enabled: false, resolvedCountry: "" })
+    chrome.storage.session.get({ enabled: false, resolvedCountry: "", autoConnectPending: false })
   ]);
   return {
     enabled: Boolean(runtime.enabled),
     autoConnect: Boolean(data.autoConnect),
+    autoConnectPending: Boolean(runtime.autoConnectPending),
     webRtcLeakProtection: data.webRtcLeakProtection !== false,
     dnsPredictionProtection: data.dnsPredictionProtection !== false,
     regionShieldEnabled: data.regionShieldEnabled !== false,
@@ -254,8 +316,149 @@ async function saveState(patch) {
     sessionPatch.resolvedCountry = String(persistent.resolvedCountry || "");
     delete persistent.resolvedCountry;
   }
+  if (Object.prototype.hasOwnProperty.call(persistent, "autoConnectPending")) {
+    sessionPatch.autoConnectPending = Boolean(persistent.autoConnectPending);
+    delete persistent.autoConnectPending;
+  }
   if (Object.keys(sessionPatch).length) await chrome.storage.session.set(sessionPatch);
   if (Object.keys(persistent).length) await chrome.storage.local.set(persistent);
+  // Keep the alarm and the content-script registration in step with the new
+  // state. Only keys that change what background work is needed re-sync; a
+  // route or allowlist edit does not.
+  if (BACKGROUND_WORK_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
+    scheduleRuntimeBackgroundSync();
+  }
+}
+
+// `chrome.storage.session` only lives inside the browser process, so a missing
+// boot marker means this is a fresh browser session. Relying on this instead of
+// `onStartup` alone covers the case where the startup event is not delivered to
+// a cold service worker.
+async function detectFreshBrowserSession() {
+  let marker;
+  try {
+    marker = await chrome.storage.session.get({ sessionBootAt: 0 });
+  } catch (_) { return false; }
+  if (marker.sessionBootAt) return false;
+  let autoConnect = false;
+  try {
+    autoConnect = Boolean((await chrome.storage.local.get({ autoConnect: false })).autoConnect);
+  } catch (_) {}
+  try {
+    await chrome.storage.session.set({ sessionBootAt: Date.now(), autoConnectPending: autoConnect });
+  } catch (_) { return false; }
+  return true;
+}
+
+async function setAutoConnectPending(value) {
+  try { await chrome.storage.session.set({ autoConnectPending: Boolean(value) }); } catch (_) {}
+  scheduleRuntimeBackgroundSync();
+}
+
+// ---------------------------------------------------------------------------
+// Background work is only paid for while it is actually useful.
+//
+// MV3 re-evaluates the whole service worker every time an alarm fires, so an
+// always-on 1-minute watchdog cost roughly 1440 wake-ups a day even with the
+// VPN switched off. For the same reason the region-shield content scripts used
+// to be registered statically for <all_urls> + all_frames: that injected 12 KB
+// of JavaScript into every frame of every page and had each of those frames
+// send a message that woke the service worker - while the VPN was off and the
+// feature was disabled.
+//
+// Both are now derived from the stored state: the watchdog exists only while a
+// tunnel is up or an auto-connect is still owed, and the content scripts are
+// registered only while the region shield is actually active.
+// ---------------------------------------------------------------------------
+const VPN_HEALTH_ALARM = "vpn-health-watchdog";
+const BACKGROUND_WORK_KEYS = ["enabled", "autoConnect", "autoConnectPending", "regionShieldEnabled"];
+const REGION_SCRIPT_IDS = ["region-shield-bridge", "region-shield-main"];
+const REGION_SCRIPT_DEFS = [
+  { id: "region-shield-bridge", js: ["region-shield-bridge.js"], world: "ISOLATED" },
+  { id: "region-shield-main", js: ["region-shield-main.js"], world: "MAIN" }
+];
+
+async function syncHealthWatchdogFor(state) {
+  if (!chrome.alarms?.create) return;
+  const needed = Boolean(state?.enabled) || Boolean(state?.autoConnect && state?.autoConnectPending);
+  let existing = null;
+  try { existing = await chrome.alarms.get(VPN_HEALTH_ALARM); } catch (_) { return; }
+  if (needed) {
+    if (!existing || existing.periodInMinutes !== 1) {
+      try { await chrome.alarms.create(VPN_HEALTH_ALARM, { periodInMinutes: 1 }); } catch (_) {}
+    }
+  } else if (existing) {
+    try { await chrome.alarms.clear(VPN_HEALTH_ALARM); } catch (_) {}
+  }
+}
+
+async function injectRegionScriptsIntoOpenTabs() {
+  let tabs = [];
+  try { tabs = await chrome.tabs.query({}); } catch (_) { return; }
+  const targets = tabs.filter((tab) => Number.isInteger(tab.id));
+  if (!targets.length) return;
+  // Inject in small batches: with many tabs open, firing hundreds of
+  // executeScript() calls at once makes the browser stutter.
+  const BATCH = 6;
+  for (const def of REGION_SCRIPT_DEFS) {
+    for (let i = 0; i < targets.length; i += BATCH) {
+      await Promise.allSettled(targets.slice(i, i + BATCH).map((tab) => chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: def.js,
+        world: def.world,
+        injectImmediately: true
+      }).catch(() => null)));
+    }
+  }
+}
+
+async function syncRegionContentScriptsFor(state) {
+  const api = chrome.scripting;
+  if (!api?.registerContentScripts || !api?.getRegisteredContentScripts) return;
+  const wanted = regionShieldIsActive(state);
+  let registered = null;
+  try {
+    const list = await api.getRegisteredContentScripts();
+    registered = list.some((script) => REGION_SCRIPT_IDS.includes(script.id));
+  } catch (_) {
+    return;
+  }
+  if (wanted === registered) return;
+  if (wanted) {
+    const defs = REGION_SCRIPT_DEFS.map((def) => ({
+      id: def.id, js: def.js, matches: ["<all_urls>"],
+      runAt: "document_start", allFrames: true,
+      world: def.world, persistAcrossSessions: true
+    }));
+    try {
+      await api.registerContentScripts(defs);
+    } catch (_) {
+      // One already-registered id makes the whole call fail; start clean.
+      try { await api.unregisterContentScripts({ ids: REGION_SCRIPT_IDS }); } catch (_) {}
+      try { await api.registerContentScripts(defs); } catch (_) { return; }
+    }
+    // Registration only affects documents that load from here on, so tabs that
+    // are already open have to be filled in explicitly.
+    await injectRegionScriptsIntoOpenTabs();
+  } else {
+    try { await api.unregisterContentScripts({ ids: REGION_SCRIPT_IDS }); } catch (_) {}
+  }
+}
+
+let runtimeSyncInFlight = null;
+function scheduleRuntimeBackgroundSync() {
+  if (runtimeSyncInFlight) return runtimeSyncInFlight;
+  runtimeSyncInFlight = (async () => {
+    try {
+      const state = await getStoredState();
+      await syncHealthWatchdogFor(state);
+      await syncRegionContentScriptsFor(state);
+    } catch (_) {
+    } finally {
+      runtimeSyncInFlight = null;
+    }
+  })();
+  return runtimeSyncInFlight;
 }
 
 function connectNative() {
@@ -677,7 +880,8 @@ function FindProxyForURL(url, host) {
   var matched = false;
   for (var i = 0; i < domains.length; i++) {
     var d = domains[i];
-    if (host === d || dnsDomainIs(host, "." + d)) { matched = true; break; }
+    // Avoid Chromium PAC-version differences around leading-dot dnsDomainIs.
+    if (host === d || (host.length > d.length && host.slice(-(d.length + 1)) === "." + d)) { matched = true; break; }
   }
   if (${JSON.stringify(mode)} === "allowlist") return matched ? ${JSON.stringify(proxy)} : "DIRECT";
   return matched ? "DIRECT" : ${JSON.stringify(proxy)};
@@ -1016,6 +1220,10 @@ function changeCountry(country) {
 async function setAutoConnect(enabled) {
   const autoConnect = Boolean(enabled);
   await saveState({ autoConnect });
+  // Turning the feature off must also cancel any auto-connect the watchdog is
+  // still owed for this session, otherwise it would reconnect against the
+  // user's explicit choice.
+  if (!autoConnect) await setAutoConnectPending(false);
   return { ok: true, autoConnect };
 }
 
@@ -1058,14 +1266,14 @@ async function setSiteRuleNow(domainInput, useVpn) {
   let bypassSites = [...state.bypassSites];
   if (normalizeProxyMode(state.proxyMode) === "allowlist") {
     if (useVpn) {
-      if (!listCoversHost(allowlist, domain)) allowlist = [...allowlist, domain];
+      if (!listCoversHostManaged(allowlist, domain)) allowlist = [...allowlist, domain];
     } else {
-      allowlist = allowlist.filter((rule) => !ruleCoversHost(rule, domain));
+      allowlist = removeManagedRule(allowlist, domain);
     }
   } else {
     if (useVpn) {
-      bypassSites = bypassSites.filter((rule) => !ruleCoversHost(rule, domain));
-    } else if (!listCoversHost(bypassSites, domain)) {
+      bypassSites = removeManagedRule(bypassSites, domain);
+    } else if (!listCoversHostManaged(bypassSites, domain)) {
       bypassSites = [...bypassSites, domain];
     }
   }
@@ -1092,10 +1300,11 @@ async function addManagedDomainNow(domainInput) {
 }
 
 async function removeManagedDomainNow(domainInput) {
-  const domain = canonicalManagedDomain(domainInput);
   const state = await getStoredState();
-  const allowlist = state.allowlist.filter((x) => x !== domain);
-  const bypassSites = state.bypassSites.filter((x) => x !== domain);
+  // Strip every stored spelling that folds onto the same managed domain so a
+  // removed rule cannot reappear through its own aliases.
+  const allowlist = removeManagedRule(state.allowlist, domainInput);
+  const bypassSites = removeManagedRule(state.bypassSites, domainInput);
   const next = { ...state, allowlist, bypassSites };
   await commitRouteMutation(state, next, { allowlist, bypassSites });
   return { ok: true, allowlist, bypassSites };
@@ -1121,8 +1330,80 @@ function addManagedDomain(domainInput) {
   return queueStateOperation(() => addManagedDomainNow(domainInput));
 }
 
+function importManagedDomains(text) {
+  return queueStateOperation(() => importManagedDomainsNow(text));
+}
+
 function removeManagedDomain(domainInput) {
   return queueStateOperation(() => removeManagedDomainNow(domainInput));
+}
+
+// Rules live in chrome.storage.local and are not synced, so migrating to
+// another browser or profile has to go through an explicit text round trip.
+// Merge instead of replace: importing must never silently drop rules the user
+// already has on this machine.
+function parseRulePayload(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return [];
+  const seen = new Set();
+  // Accept a bare newline/comma/space separated list as well as a JSON array,
+  // so a list copied straight from a text file still imports.
+  let items = [];
+  if (raw.startsWith("[")) {
+    let parsed;
+    try { parsed = JSON.parse(raw); }
+    catch (_) { throw new Error("导入内容不是有效的 JSON 数组。"); }
+    if (!Array.isArray(parsed)) throw new Error("导入内容必须是数组。");
+    items = parsed;
+  } else {
+    // One entry per line first, so a comment or header line stays whole and can
+    // be dropped below instead of being shredded into word-sized fragments.
+    items = raw.split(/\r?\n|;/);
+  }
+  for (const item of items) {
+    const value = String(item ?? "").trim();
+    if (!value) continue;
+    // The export header is plain text in the same block as the rules. Skip any
+    // line that is not made of bare domains (comments, "共 N 条", stray prose)
+    // so our own export round-trips and a pasted list never becomes bogus rules.
+    const candidate = value.replace(/^#/, "").trim();
+    if (!candidate) continue;
+    // A pasted entry may be a full URL ("https://ippure.com/x.html"). Reduce it
+    // to a hostname first; only then decide whether the line is a real rule.
+    const pieces = candidate.split(/[,\s]+/).filter(Boolean).map((piece) => {
+      try { return canonicalManagedDomain(piece); }
+      catch (_) { return ""; }
+    });
+    if (!pieces.length || pieces.some((piece) => !piece)) continue;
+    for (const domain of pieces) {
+      if (!seen.has(domain)) seen.add(domain);
+    }
+  }
+  if (!seen.size) throw new Error("没有找到可导入的域名。");
+  return [...seen].sort();
+}
+
+async function exportManagedDomainsNow() {
+  const state = await getStoredState();
+  const mode = normalizeProxyMode(state.proxyMode);
+  const domains = normalizeManagedDomainArray(mode === "allowlist" ? state.allowlist : state.bypassSites);
+  return { mode, domains };
+}
+
+async function importManagedDomainsNow(text) {
+  const incoming = parseRulePayload(text);
+  if (!incoming.length) throw new Error("没有可导入的域名。");
+  const state = await getStoredState();
+  const before = normalizeProxyMode(state.proxyMode) === "allowlist" ? state.allowlist : state.bypassSites;
+  const merged = normalizeManagedDomainArray([...before, ...incoming]);
+  const added = merged.filter((domain) => !before.includes(domain));
+  let allowlist = state.allowlist;
+  let bypassSites = state.bypassSites;
+  if (normalizeProxyMode(state.proxyMode) === "allowlist") allowlist = merged;
+  else bypassSites = merged;
+  const next = { ...state, allowlist, bypassSites };
+  await commitRouteMutation(state, next, { allowlist, bypassSites });
+  return { ok: true, allowlist, bypassSites, added: added.length, total: merged.length, mode: normalizeProxyMode(state.proxyMode) };
 }
 
 
@@ -1236,9 +1517,39 @@ async function monitorActiveVpnHealth() {
   if (healthCheckInFlight) return { ok: true, skipped: true };
   healthCheckInFlight = true;
   try {
+    // Cheap pre-check before enqueuing: queueLifecycleOperation bumps the
+    // lifecycle generation as soon as it is called, so enqueuing here while the
+    // startup retry loop is still mid-flight would mark that attempt stale and
+    // cancel it. Let the retry loop own the session until it finishes.
+    if (autoConnectInFlight) return { ok: true, skipped: true };
     return await queueLifecycleOperation(async (generation) => {
       const state = await getStoredState();
-      if (!state.enabled) return { ok: true, active: false };
+      if (!state.enabled) {
+        // The startup retry loop has given up, but auto-connect is still owed
+        // for this session (usually because the network or the upstream was not
+        // ready yet). The watchdog is the backstop that lets the browser come
+        // up on its own later, without the user ever opening the popup.
+        if (!state.autoConnect || !state.autoConnectPending) return { ok: true, active: false };
+        let bootAt = 0;
+        try { bootAt = Number((await chrome.storage.session.get({ sessionBootAt: 0 })).sessionBootAt) || 0; } catch (_) {}
+        if (!bootAt || Date.now() - bootAt > AUTO_CONNECT_WATCHDOG_WINDOW_MS) {
+          // Stop retrying forever: drop the outstanding request for this session.
+          await setAutoConnectPending(false);
+          return { ok: true, active: false, expired: true };
+        }
+        if (autoConnectInFlight) return { ok: true, active: false, skipped: true };
+        autoConnectInFlight = true;
+        try {
+          await startVpnNow(state.country, generation);
+          await setAutoConnectPending(false);
+          return { ok: true, active: true, recovered: true };
+        } catch (error) {
+          // startVpnNow has already restored DIRECT and persisted a useful error.
+          return { ok: false, active: false, recovered: false, error: error.message };
+        } finally {
+          autoConnectInFlight = false;
+        }
+      }
 
       let helperResponse;
       let proxy;
@@ -1287,7 +1598,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     switch (message?.type) {
       case "status": return fullStatus();
-      case "toggle": return message.enabled ? startVpn(message.country) : stopVpn();
+      case "toggle": {
+        // A manual "close VPN" from the popup cancels the outstanding
+        // auto-connect for this session; the watchdog must not undo the user.
+        if (!message.enabled) await setAutoConnectPending(false);
+        return message.enabled ? startVpn(message.country) : stopVpn();
+      }
       case "country": return changeCountry(message.country);
       case "autoConnect": return setAutoConnect(Boolean(message.enabled));
       case "privacyOption": return setPrivacyOption(message.option, Boolean(message.enabled));
@@ -1297,7 +1613,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "regionContentConfig": return { ok:true, config:await regionContentConfig(message.host || "") };
       case "proxyMode": return setProxyMode(message.mode);
       case "setSiteRule": return setSiteRule(message.domain, Boolean(message.useVpn));
+      // The popup must never re-derive the route from the raw stored list: the
+      // PAC matches the canonicalized + site-family-expanded domains, so the UI
+      // asking the background keeps both on exactly one decision function.
+      case "routeFor": return { ok: true, host: message.host || "", usesVpn: routeUsesVpnForState(await getStoredState(), message.host || "") };
       case "addManagedDomain": return addManagedDomain(message.domain);
+      case "importManagedDomains": return importManagedDomains(message.text);
+      // Export is a pure read of the active mode's list; the popup turns it
+      // into clipboard text so no file ever touches disk.
+      case "exportManagedDomains": return { ok: true, ...(await exportManagedDomainsNow()) };
       case "removeManagedDomain": return removeManagedDomain(message.domain);
       case "importFirefox": return requestForCurrentState("import_firefox", {}, 150000);
       case "usage": return requestForCurrentState("usage", {}, 90000);
@@ -1311,7 +1635,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "prepareRemoveLocal": return queueLifecycleOperation(() => prepareCleanup("local"));
       case "prepareFullUninstall": return queueLifecycleOperation(() => prepareCleanup("full"));
       case "cancelCleanup": return nativeOneShot("cancel_cleanup", { token: message.token }, 10000);
-      default: throw new Error("未知的扩展命令。");
+      // Name the offending command: a bare "unknown" is impossible to diagnose
+      // A popup left over from a previous build can send a command this build
+      // no longer knows. That is not a user-facing VPN failure, so do not
+      // persist it into lastError and show it as a red banner.
+      default: return sendResponse({ ok: false, error: `未知的扩展命令：${JSON.stringify(message?.type ?? null)}`, ignored: true });
     }
   })().then(sendResponse).catch((error) => {
     saveState({ lastError: error.message }).finally(() => sendResponse({ ok: false, error: error.message }));
@@ -1336,17 +1664,10 @@ chrome.windows.onRemoved.addListener(() => {
   setTimeout(stopVpnWhenLastWindowCloses, 200);
 });
 
-const VPN_HEALTH_ALARM = "vpn-health-watchdog";
 if (chrome.alarms?.onAlarm) {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm?.name === VPN_HEALTH_ALARM) monitorActiveVpnHealth().catch(() => {});
   });
-}
-
-async function armVpnHealthWatchdog() {
-  if (!chrome.alarms?.create) return;
-  try { await chrome.alarms.create(VPN_HEALTH_ALARM, { periodInMinutes: 1 }); }
-  catch (_) {}
 }
 
 async function resetVpnForFreshBrowserSession(reason = "") {
@@ -1395,26 +1716,79 @@ async function migrateRuntimeStateOnce() {
   await updateAction(false, state.proxyMode);
 }
 
-async function handleBrowserStartup() {
-  await armVpnHealthWatchdog();
-  // Always begin fail-open: remove any stale PAC/SOCKS state before doing network work.
-  await queueLifecycleOperation(async () => {
-    await resetVpnForFreshBrowserSession();
-    return { ok: true };
-  });
+async function autoConnectStillOwed() {
   const state = await getStoredState();
-  if (!state.autoConnect) return;
+  return Boolean(state.autoConnect && state.autoConnectPending && !state.enabled);
+}
+
+// Bounded retry for the browser-startup auto-connect. The local helper's pool
+// process can die during the first seconds after Chrome launches, and that
+// failure is usually transient — a later attempt typically succeeds. Every
+// iteration re-checks that the user has not turned the feature off or opened
+// the VPN by hand in the meantime.
+async function attemptAutoConnect(country) {
+  if (autoConnectInFlight) return { ok: true, skipped: true };
+  autoConnectInFlight = true;
   try {
-    // The tunnel bootstrap takes several seconds; surface that on the toolbar
-    // icon right away instead of leaving the browser-startup state ambiguous.
-    // startVpn/failOpenNow overwrite the title when they finish.
-    try { await chrome.action.setTitle({ title: "正在自动连接 VPN…" }); } catch (_) {}
-    // startVpn() launches the Native Messaging helper first, waits for SOCKS5 readiness,
-    // and only then installs Chrome's PAC script. A failure therefore leaves Chrome direct.
-    await startVpn(state.country);
-  } catch (error) {
-    await failOpenNow(`启动时自动连接失败：${error.message}`, { stopNative: true });
+    let lastError = null;
+    for (let attempt = 0; attempt <= AUTO_CONNECT_RETRY_DELAYS_MS.length; attempt++) {
+      if (attempt > 0) {
+        await sleepMs(AUTO_CONNECT_RETRY_DELAYS_MS[attempt - 1]);
+        if (!(await autoConnectStillOwed().catch(() => false))) {
+          return { ok: true, cancelled: true, attempts: attempt };
+        }
+      }
+      // The tunnel bootstrap takes several seconds; surface that on the toolbar
+      // icon right away instead of leaving the browser-startup state ambiguous.
+      // startVpn/failOpenNow overwrite the title when they finish.
+      try { await chrome.action.setTitle({ title: "正在自动连接 VPN…" }); } catch (_) {}
+      try {
+        const response = await startVpn(country);
+        if (response?.superseded) return { ok: true, superseded: true, attempts: attempt + 1 };
+        await setAutoConnectPending(false);
+        return { ok: true, response, attempts: attempt + 1 };
+      } catch (error) {
+        lastError = error;
+        if (!(await autoConnectStillOwed().catch(() => false))) {
+          return { ok: true, cancelled: true, attempts: attempt + 1 };
+        }
+      }
+    }
+    const message = String(lastError?.message || "未知错误");
+    // Keep the historical wording so existing diagnostics stay recognisable.
+    try { await saveState({ lastError: `启动时自动连接失败：${message}` }); } catch (_) {}
+    return { ok: false, error: message, attempts: AUTO_CONNECT_RETRY_DELAYS_MS.length + 1 };
+  } finally {
+    autoConnectInFlight = false;
   }
+}
+
+async function handleBrowserStartup() {
+  await scheduleRuntimeBackgroundSync();
+  // A cold service worker may not receive onStartup at all; the session marker
+  // makes the auto-connect decision independent of that single event.
+  await detectFreshBrowserSession().catch(() => {});
+  // Fail-open must never block auto-connect. Reading Chrome's proxy state can
+  // fail during the first moments of a cold browser start, and
+  // resetVpnForFreshBrowserSession() throws in that case — which used to abort
+  // this whole function before startVpn() ever ran, leaving auto-connect
+  // silently dead for the rest of the session.
+  try {
+    await queueLifecycleOperation(async () => {
+      await resetVpnForFreshBrowserSession();
+      return { ok: true };
+    });
+  } catch (_) {
+    try { await clearChromeProxy(); } catch (_) {}
+    try { await saveState({ enabled: false, resolvedCountry: "" }); } catch (_) {}
+  }
+  let state;
+  try { state = await getStoredState(); } catch (_) { return; }
+  if (!state.autoConnect) return;
+  // startVpn() launches the Native Messaging helper first, waits for SOCKS5
+  // readiness, and only then installs Chrome's PAC script, so a failed attempt
+  // always leaves Chrome direct and the retry below stays safe.
+  await attemptAutoConnect(state.country);
 }
 
 chrome.runtime.onStartup.addListener(() => {
@@ -1422,7 +1796,16 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  armVpnHealthWatchdog().catch(() => {});
+  scheduleRuntimeBackgroundSync().catch(() => {});
+  // A reload/update tears the tunnel down, so re-arm the session marker here too.
+  // The marker normally belongs to a fresh browser session, but an extension
+  // reload happens *inside* one and would otherwise leave auto-connect unarmed.
+  (async () => {
+    try {
+      const autoConnect = Boolean((await chrome.storage.local.get({ autoConnect: false })).autoConnect);
+      await chrome.storage.session.set({ sessionBootAt: Date.now(), autoConnectPending: autoConnect });
+    } catch (_) {}
+  })().catch(() => {});
   // Reload/update must also fail open: a Native Messaging host may have been killed
   // while Chrome still remembers the old PAC script.
   queueLifecycleOperation(() => resetVpnForFreshBrowserSession()).catch(() => {});
@@ -1431,7 +1814,9 @@ chrome.runtime.onInstalled.addListener(() => {
 // One-time migration executes immediately after upgrading/reloading from <= 0.5.6,
 // so a stale PAC setting is cleared without waiting for the next browser restart.
 (async () => {
-  await armVpnHealthWatchdog();
+  await scheduleRuntimeBackgroundSync();
+  // Runs on every service-worker wake-up but only acts once per browser session.
+  await detectFreshBrowserSession();
   await migrateRuntimeStateOnce();
   await migrateRoutingModeAndDnsScopeOnce();
 })().catch(() => {});

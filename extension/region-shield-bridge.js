@@ -1,4 +1,10 @@
 (() => {
+  // executeScript() can run this file on a frame that is already instrumented
+  // (for example when the shield is switched on for tabs that were already
+  // open). A second copy would stack duplicate listeners and handlers.
+  if (window.__ffipRegionShieldBridgeLoaded) return;
+  window.__ffipRegionShieldBridgeLoaded = true;
+
   const SOURCE = "ffip-region-shield";
 
   function publish(config) {

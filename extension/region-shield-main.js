@@ -1,4 +1,11 @@
 (() => {
+  // executeScript() can run this file on a frame that is already instrumented
+  // (for example when the shield is switched on for tabs that were already
+  // open). A second copy would capture the already-patched getters as its
+  // "native" originals, which makes the overrides impossible to undo cleanly.
+  if (globalThis.__ffipRegionShieldMainLoaded) return;
+  globalThis.__ffipRegionShieldMainLoaded = true;
+
   const SOURCE = "ffip-region-shield";
   let config = { active:false, profile:{ country:"US", locale:"en-US", languages:["en-US","en"], timeZone:"America/New_York" } };
   let installed = false;

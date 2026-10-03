@@ -182,6 +182,9 @@ class PoolManager:
         self._job_handle = None
         self.country = "REC"
         self.resolved_country = ""
+        # False when the running pool can only offer shared anycast exits, so the
+        # egress country is decided upstream and the UI must not promise a place.
+        self.country_pinned = True
         self.lock = threading.RLock()
         # End-to-end SOCKS5 probes cost a full round trip through the tunnel.
         # Cache the verdict briefly so popup opens and post-start checks do not
@@ -252,6 +255,26 @@ class PoolManager:
             and bool(str(node.get("hostname") or "").strip())
         )
 
+    @staticmethod
+    def _is_anycast_catchall(node: dict[str, Any]) -> bool:
+        """Return True for catch-all anycast exits, whose egress country is not pinned.
+
+        Mozilla ships a "CatchAll Anycast" server whose record carries a rollout
+        country (it is listed as US) but whose hostname is a shared anycast
+        endpoint. Traffic through it leaves from whatever Fastly POP answers,
+        so a user who selected US can be handed an NL exit. Latency ranking picks
+        it just like any other node, which is why the exit country drifts.
+        """
+        label = f"{node.get('label') or ''} {node.get('city') or ''} {node.get('name') or ''}".lower()
+        hostname = str(node.get("hostname") or "").lower()
+        return (
+            "catchall" in label
+            or "catch-all" in label
+            or "anycast" in label
+            # p.m1 / similar shared anycast hostnames are also not country-pinned.
+            or hostname.startswith("p.m")
+        )
+
     def _read_latency_cache(self) -> dict[str, dict[str, float]]:
         try:
             data = json.loads(LATENCY_CACHE_FILE.read_text(encoding="utf-8"))
@@ -306,10 +329,17 @@ class PoolManager:
             return 999999.0
 
     def _rank_nodes(self, country: str, nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        candidates = [
-            node for node in nodes
-            if self._node_usable(node) and str(node.get("country") or "").upper() == country
-        ]
+        # Prefer country-pinned exits. A shared anycast node carries a rollout
+        # country in its record but egresses from whichever Fastly POP answers,
+        # so including it would make the advertised location drift (US -> NL).
+        candidates = self._country_pinned_candidates(country, nodes)
+        if not candidates:
+            # Last resort for a country that only exposes anycast exits: keep the
+            # tunnel working and let the caller report the weaker guarantee.
+            candidates = [
+                node for node in nodes
+                if self._node_usable(node) and str(node.get("country") or "").upper() == str(country or "").upper()
+            ]
         # One hostname can appear more than once in Remote Settings; only benchmark it once.
         unique: dict[str, dict[str, Any]] = {}
         for node in candidates:
@@ -354,7 +384,9 @@ class PoolManager:
     def _choose_recommended_country(self, nodes: list[dict[str, Any]]) -> str:
         by_country: dict[str, list[dict[str, Any]]] = {}
         for node in nodes:
-            if not self._node_usable(node):
+            if not self._node_usable(node) or self._is_anycast_catchall(node):
+                # Anycatchall exits are not country-pinned, so they must not win
+                # the "recommended" vote: the advertised country would be a guess.
                 continue
             code = str(node.get("country") or "").upper()
             if COUNTRY_RE.fullmatch(code) and code != "REC":
@@ -414,6 +446,16 @@ class PoolManager:
                 entry["count"] += 1
                 entry["available"] = True
         return sorted(grouped.values(), key=lambda item: (not item["available"], item["code"]))
+
+    def _country_pinned_candidates(self, country: str, nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Nodes for `country` that are guaranteed to exit inside that country."""
+        country = str(country or "").upper()
+        return [
+            node for node in nodes
+            if self._node_usable(node)
+            and str(node.get("country") or "").upper() == country
+            and not self._is_anycast_catchall(node)
+        ]
 
     def _resolve_country(self, requested: str) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
         locations = self.locations(force=False)
@@ -492,7 +534,17 @@ class PoolManager:
                 raise BridgeError("尚未导入 Firefox 登录凭据。请先点击“从 Firefox 导入”。")
 
             resolved_country, _, ranked_nodes = self._resolve_country(country)
-            preferred_hosts = [str(node.get("hostname") or "").strip().lower() for node in ranked_nodes[:MAX_FAST_BACKENDS]]
+            selected_nodes = ranked_nodes[:MAX_FAST_BACKENDS]
+            preferred_hosts = [str(node.get("hostname") or "").strip().lower() for node in selected_nodes]
+            # IPP_PREFERRED_HOSTS only reorders the pool's selection, so a shared
+            # anycast exit filed under this country would still be started. Pass an
+            # explicit exclusion to keep the advertised exit country truthful.
+            excluded_hosts = sorted({
+                str(node.get("hostname") or "").strip().lower()
+                for node in self._load_exit_nodes()
+                if self._is_anycast_catchall(node)
+                and str(node.get("country") or "").upper() == resolved_country
+            } - set(preferred_hosts))
             cmd = [
                 str(system_python_path()),
                 str(UPSTREAM / "ipp_pool.py"),
@@ -505,6 +557,8 @@ class PoolManager:
                 "--no-http",
                 "--include-locked",
             ]
+            if excluded_hosts:
+                cmd.extend(["--exclude-hosts", ",".join(excluded_hosts)])
             child_env = upstream_env()
             child_env["IPP_PREFERRED_HOSTS"] = ",".join(preferred_hosts)
             # The pool's stdout is redirected to a file; without this the
@@ -558,6 +612,7 @@ class PoolManager:
 
                 self.country = country
                 self.resolved_country = resolved_country
+                self.country_pinned = not any(self._is_anycast_catchall(node) for node in selected_nodes)
                 wait_timeout = STARTUP_TIMEOUT_SECONDS if attempt == 1 else max(
                     1.0, min(STARTUP_TIMEOUT_SECONDS, retry_deadline - time.monotonic())
                 )
@@ -622,10 +677,16 @@ class PoolManager:
             self._last_probe_ok = True
             self._last_probe_ts = time.time()
 
+            anycast_backends = sum(1 for node in selected_nodes if self._is_anycast_catchall(node))
             return {
                 "running": True, "country": country, "resolvedCountry": resolved_country, "port": SOCKS_PORT,
                 "preferredHost": preferred_hosts[0] if preferred_hosts else "",
                 "backendCount": min(MAX_FAST_BACKENDS, len(ranked_nodes)),
+                # When every backend is a shared anycast exit the egress country is
+                # decided by Fastly's routing, not by the requested country. The
+                # UI must not advertise a location it cannot guarantee.
+                "countryPinned": anycast_backends == 0,
+                "anycastBackends": anycast_backends,
             }
 
     def stop(self) -> None:
@@ -678,6 +739,8 @@ class PoolManager:
                 "credentials": self.credentials_present(),
                 "country": self.country,
                 "resolvedCountry": self.resolved_country,
+                "countryPinned": self.country_pinned,
+                "credential": credential_freshness(),
                 "port": SOCKS_PORT,
                 "installRoot": str(PROJECT_ROOT),
                 "bridgeVersion": BRIDGE_VERSION,
@@ -953,6 +1016,34 @@ def refresh_state_summary() -> tuple[str | None, int | None, float | None]:
         int(status) if isinstance(status, int) and 100 <= status <= 599 else None,
         float(retry_at) if isinstance(retry_at, (int, float)) else None,
     )
+
+
+def credential_freshness() -> dict[str, Any]:
+    """Report how recently the stored Mozilla credential was last proven good.
+
+    The imported session token is only refreshed while Firefox itself runs, so
+    the UI can warn before a stale token silently breaks the tunnel. Values are
+    derived from the sanitized state file and never contain secret material.
+    """
+    path = UPSTREAM / "tokens" / "refresh_state.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = None
+    if not isinstance(data, dict):
+        return {"known": False, "result": "", "failures": 0, "lastSuccessAgoHours": None}
+    raw_success = data.get("last_success_at")
+    age_hours: float | None = None
+    if isinstance(raw_success, (int, float)) and raw_success > 0:
+        age_hours = max(0.0, (time.time() - float(raw_success)) / 3600.0)
+    failures = data.get("consecutive_failures")
+    return {
+        "known": True,
+        "result": str(data.get("result") or ""),
+        "failures": int(failures) if isinstance(failures, int) and failures > 0 else 0,
+        "lastSuccessAgoHours": age_hours,
+    }
+
 
 
 def port_open(host: str, port: int) -> bool:
