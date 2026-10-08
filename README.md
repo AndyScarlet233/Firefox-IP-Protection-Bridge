@@ -53,7 +53,7 @@ The raw account session token is never handed back to the extension page or to
 - Two per-site split-tunnelling modes, applied through a route-scoped PAC script:
   - **Allowlist** — only the sites you list go through the VPN; everything else
     stays direct.
-  - **Blacklist** — everything goes through the VPN except the sites you list.
+  - **Blocklist** — everything goes through the VPN except the sites you list.
 - A per-site switch for the page you are currently on.
 - Rule export/import, for moving rules between browsers and Chrome profiles
   (`chrome.storage.local` does not sync).
@@ -130,11 +130,11 @@ extension. Building the runtime is a separate, reviewed step described in
    back to `docs/BUILD.md`.
 3. **Load the extension.** Open `chrome://extensions`, turn on **Developer mode**,
    click **Load unpacked**, and select this repository's `extension` directory.
-4. **Get credentials.** Open the popup, expand 设置 (Settings), and either click
-   **浏览器登录** (Browser Login) or, on a machine that already has Firefox signed
-   in, **从 Firefox 导入** (Import from Firefox). See
+4. **Get credentials.** Open the popup, expand **Settings**, and either click
+   **Sign in via browser** or, on a machine that already has Firefox signed
+   in, **Import from Firefox**. See
    [Getting credentials](#getting-credentials).
-5. **Connect.** Click 开启 VPN (Turn on VPN), pick a region or leave the
+5. **Connect.** Click **Turn on VPN**, pick a region or leave the
    recommendation, and browse.
 
 > **Loading only the extension does not give you a VPN.** Without a registered
@@ -168,8 +168,8 @@ the only path that does not need Firefox.
 
 ### Path A — browser login (recommended, no Firefox required)
 
-1. Open the extension popup and expand 设置 (Settings).
-2. Click **浏览器登录** (Browser Login). A small form appears inside the popup.
+1. Open the extension popup and expand **Settings**.
+2. Click **Sign in via browser**. A small form appears inside the popup.
 3. Enter your Mozilla account **email** and **password** in that form. These are
    Chromium's own input fields, so input-method editors (including CJK IMEs) work
    normally. Submit.
@@ -198,8 +198,8 @@ an eligible account:
 
 1. Enable Firefox's built-in IP Protection once in Firefox, so the profile holds
    a usable signed-in record.
-2. Open the extension popup, expand 设置 (Settings), and click **从 Firefox 导入**
-   (Import from Firefox).
+2. Open the extension popup, expand **Settings**, and click **Import from
+   Firefox**.
 3. The host scans the local Firefox profiles and selects the most recently
    modified verified record.
 
@@ -211,7 +211,7 @@ removes the Firefox dependency entirely.
 
 ### Turning it on and off
 
-Click 开启 VPN (Turn on VPN). The extension verifies a real SOCKS5
+Click **Turn on VPN**. The extension verifies a real SOCKS5
 handshake/CONNECT before installing the PAC script, so a helper that is not
 actually healthy is not advertised as connected. Turning the VPN off clears this
 extension's Chromium proxy setting, stops the SOCKS5 process, and disconnects the
@@ -220,44 +220,44 @@ connection; it is not a background service.
 
 ### Choosing an exit region
 
-Click the location button to pick a country, or leave it on 推荐（自动）
-(Recommended, automatic). The recommendation is ranked by measured latency and
+Click the location button to pick a country, or leave it on **Recommended
+(automatic)**. The recommendation is ranked by measured latency and
 excludes shared anycast exits, whose egress country is decided upstream — that is
 why a region you select is the region you get. When you connect with the
 recommendation, the popup tells you which region it resolved to.
 
 ### Splitting traffic per site
 
-Choose the mode in 设置 (Settings):
+Choose the mode in **Settings**:
 
-- **白名单 (Allowlist)** — only listed sites use the VPN; everything else stays
+- **Allowlist** — only listed sites use the VPN; everything else stays
   direct.
-- **黑名单 (Blacklist)** — everything uses the VPN except listed sites.
+- **Blocklist** — everything uses the VPN except listed sites.
 
 Add domains in the list field. Domain shape is validated before storage, so
 pasted prose is rejected rather than turned into bogus rules. The switch next to
 the address bar reflects the current page and asks the background for the routing
-decision, so the switch and the PAC script never disagree. Use 导出 (Export) and
-导入 (Import) to move rules between browsers or profiles; import merges and never
+decision, so the switch and the PAC script never disagree. Use **Export** and
+**Import** to move rules between browsers or profiles; import merges and never
 overwrites existing rules.
 
 ### Privacy controls
 
-All three are in 设置 (Settings) and are described in
+All three are in **Settings** and are described in
 [Features](#privacy-controls). WebRTC leak protection and DNS prefetch
 protection are scoped so that directly connected pages are left alone.
 
 ### Checking usage
 
-Click 查询 (Query) under 本月用量 (This month's usage) to see the plan, data
+Click **Check** under **Usage this month** to see the plan, data
 used, data remaining, and the reset time. The figures come from Mozilla's server.
 
 ### Uninstalling
 
-- **删除本地组件 (Delete local components)** in the popup removes the local
+- **Delete local component** in the popup removes the local
   runtime: the private Python packages, credentials, logs, native helper, and the
   Native Messaging registry entries. The extension stays loaded.
-- **完整卸载 (Full uninstall)** in the popup runs the same cleanup and then
+- **Full uninstall** in the popup runs the same cleanup and then
   removes the extension itself.
 - Deleting the whole project folder removes every local program and data file
   belonging to this project. One harmless registry pointer may remain; it points
@@ -265,7 +265,7 @@ used, data remaining, and the reset time. The figures come from Mozilla's server
 
 Chromium offers no extension-uninstall hook that can run a local program, so
 removing the extension straight from `chrome://extensions` cannot reliably ask the
-helper to clean itself up afterwards. Prefer **完整卸载** inside the popup.
+helper to clean itself up afterwards. Prefer **Full uninstall** inside the popup.
 
 Do **not** delete the `tokens` directory to fix a problem. Credentials live there
 and are preserved across repairs.
@@ -309,7 +309,7 @@ so a silent failure has several possible causes:
 ### The browser-login button is disabled or reports missing components
 
 The optional Playwright dependency is not installed in the local runtime. Only
-browser login is affected; use **从 Firefox 导入** (Import from Firefox) in the
+browser login is affected; use **Import from Firefox** in the
 meantime, or re-run the setup script to install the missing components.
 
 ### ERR_PROXY_CONNECTION_FAILED
@@ -332,14 +332,14 @@ A `LISTEN` on `127.0.0.1:1090` is the live proxy check. Do not delete the
 
 The popup stops polling after 15 minutes so a stuck flow cannot poll forever, and
 the host treats a heartbeat older than 120 seconds as a dead child. Both cases are
-reported as a failure rather than an endless wait. Click **浏览器登录** again to
-retry; clicking it while a flow is running cancels that flow.
+reported as a failure rather than an endless wait. Click **Sign in via browser**
+again to retry; clicking it while a flow is running cancels that flow.
 
 ### Credentials stopped working
 
 If Mozilla invalidated the session (a password change is the usual cause), run
-**浏览器登录** once more. The popup shows a one-line credential freshness hint
-derived from sanitized renewal state.
+**Sign in via browser** once more. The popup shows a one-line credential freshness
+hint derived from sanitized renewal state.
 
 ### Where the logs are
 

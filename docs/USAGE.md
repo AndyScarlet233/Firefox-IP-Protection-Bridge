@@ -42,29 +42,29 @@ runtime's `pw-browsers` directory); in a source checkout you install them
 yourself. If they are missing, the popup disables the browser-login button and
 tells you to re-run the setup script. Every other feature keeps working.
 
-1. **Open the form.** Open the extension popup, expand 设置 (Settings), and click
-   **浏览器登录** (Browser Login). A form with an email field and a password field
-   appears inside the popup, directly under the Mozilla account row.
+1. **Open the form.** Open the extension popup, expand **Settings**, and click
+   **Sign in via browser**. A form with an email field and a password field
+   appears inside the popup, directly under the **Mozilla account** row.
 
 2. **Enter your credentials.** Type your Mozilla account email and password into
    that form. These are Chromium's own `<input>` elements, so Windows input-method
    editors — including Chinese, Japanese, and Korean IMEs — behave normally.
    Earlier builds collected these in a console window, which mangled CJK input;
    that path is gone. The password field is not persisted anywhere by the popup.
+   Its placeholder reads **Account password (not stored)**.
 
-3. **Submit.** Click 开始登录 (Start login). The popup collapses the form, changes
-   the button to 登录中…点击取消 (Signing in… click to cancel), and starts polling
+3. **Submit.** Click **Start sign-in**. The popup collapses the form, changes
+   the button to **Signing in… click to cancel**, and starts polling
    the host for progress every three seconds.
 
 4. **The human check runs in the background.** The bridge launches a headless
    Playwright Firefox and passes the Fastly human check on its own. The popup
-   shows 正在后台通过网站人机检查，请稍候… (Passing the site's human check in the
-   background…). There is no visible browser window at any point — the popup is
-   the only UI.
+   shows **Passing the site's bot check in the background, please wait…** There is
+   no visible browser window at any point — the popup is the only UI.
 
 5. **Answer the image captcha if one appears.** When Fastly asks for one, the
-   captcha image is displayed in the popup with the hint 请输入图片中的字符 (Enter
-   the characters in the image). Type the characters and submit. A wrong answer
+   captcha image is displayed in the popup with the hint **Enter the characters
+   shown in the image**. Type the characters and submit. A wrong answer
    automatically fetches a fresh image, and the challenge area scrolls into view
    and takes focus when it appears. Each image carries a sequence number, so a
    stale answer can never be applied to a newer image.
@@ -74,20 +74,19 @@ tells you to re-run the setup script. Every other feature keeps working.
    OAuth token fails. The flow therefore probes `GET /session/status` and, when
    confirmation is required, asks you for the code:
    - **Email confirmation (usual case).** Mozilla mails a 6-digit code. The popup
-     shows 请输入 Mozilla 发送到邮箱的 6 位验证码 (Enter the 6-digit code Mozilla
-     emailed you) and a six-digit input field. The code can take several minutes
-     to arrive; the flow waits up to 15 minutes for it.
+     shows **Enter the 6-digit code Mozilla sent to your email** and a six-digit
+     input field. The code can take several minutes to arrive; the flow waits up
+     to 15 minutes for it.
    - **Two-step verification with a TOTP app.** The popup instead shows
-     请输入验证器应用中的 6 位动态验证码 (Enter the 6-digit code from your
-     authenticator app). The code is confirmed through `POST /session/verify/totp`
-     rather than `POST /session/verify_code`.
+     **Enter the 6-digit code from your authenticator app**. The code is confirmed
+     through `POST /session/verify/totp` rather than `POST /session/verify_code`.
    - If you already typed the same code on the accounts page, the flow reuses it
      instead of asking you for it twice.
 
-7. **Wait for the exchange.** The popup shows 正在交换登录凭据… (Exchanging login
-   credentials…) while the session is converted into renewable credentials. On
-   success it reports 登录成功，凭据已保存，之后会自动续期 (Signed in; credentials
-   saved and will renew automatically). The Mozilla account row then shows the
+7. **Wait for the exchange.** The popup shows **Exchanging the sign-in
+   credentials…** while the session is converted into renewable credentials. On
+   success it reports **Signed in. The credentials were saved and will renew
+   automatically from now on.** The Mozilla account row then shows the
    masked account address.
 
 8. **First-time accounts are activated automatically.** If the account has never
@@ -98,10 +97,11 @@ After a successful login, credentials renew over plain HTTP (PyFxA) with no
 browser involved. Firefox never needs to run again.
 
 **Cancelling.** While a flow is running, the same button reads
-登录中…点击取消. Clicking it cancels the flow and reports 登录已被用户取消 (Login
-cancelled by the user). The popup also stops polling after 15 minutes, so a stuck
-flow is reported as a failure rather than an endless wait; the host independently
-treats a heartbeat older than 120 seconds as a dead child process.
+**Signing in… click to cancel**. Clicking it cancels the flow and reports that
+cancellation was requested while it waits for the flow to end. The popup also
+stops polling after 15 minutes, so a stuck flow is reported as a failure rather
+than an endless wait; the host independently treats a heartbeat older than 120
+seconds as a dead child process.
 
 **If it fails.** Read `runtime\logs\bootstrap-login.log` for the full transcript
 of the login child process. Passwords and verification codes never appear there.
@@ -115,8 +115,8 @@ an eligible account. It needs Firefox; browser login does not.
 
 1. Enable Firefox's built-in IP Protection once in Firefox, so that the profile
    holds a usable signed-in record.
-2. Open the extension popup, expand 设置 (Settings), and click **从 Firefox 导入**
-   (Import from Firefox).
+2. Open the extension popup, expand **Settings**, and click **Import from
+   Firefox**.
 3. The native host scans the local Firefox profiles and selects the most recently
    modified verified `signedInUser.json` record.
 
@@ -127,10 +127,10 @@ desktop Firefox to be installed.
 
 ### Turning it on and off
 
-Click 开启 VPN (Turn on VPN). Before installing the PAC script, the extension
+Click **Turn on VPN**. Before installing the PAC script, the extension
 verifies a real SOCKS5 handshake and CONNECT against the local helper, so a helper
 that is not actually healthy is never advertised as connected. When the connection
-succeeds, the popup reports 已连接 (Connected) and, if you left the region on the
+succeeds, the popup reports **VPN connected.** and, if you left the region on the
 recommendation, names the region it resolved to.
 
 Turning the VPN off clears this extension's Chromium proxy setting, stops the
@@ -140,7 +140,7 @@ the duration of an active connection; it is not a background service.
 ### Choosing an exit region
 
 Click the location button under the switch to pick a country, or leave it on
-推荐（自动）(Recommended, automatic).
+**Recommended (automatic)**.
 
 The recommendation is ranked by measured latency and excludes shared anycast
 exits. A shared anycast exit carries a rollout country in its record but egresses
@@ -150,50 +150,50 @@ actually get.
 
 ### Splitting traffic per site
 
-Choose the mode in 设置 (Settings):
+Choose the mode in **Settings**:
 
-- **白名单 (Allowlist)** — only the sites in the list use the VPN; everything else
+- **Allowlist** — only the sites in the list use the VPN; everything else
   stays direct.
-- **黑名单 (Blacklist)** — everything uses the VPN except the sites in the list.
+- **Blocklist** — everything uses the VPN except the sites in the list.
 
-Add domains in the list field and click 添加 (Add). Domain shape is validated
+Add domains in the list field and click **Add**. Domain shape is validated
 before storage, so pasted prose is rejected instead of being turned into bogus
 rules. The switch next to the address bar shows the current page's state and asks
 the background for the routing decision, so the switch and the installed PAC
 script always agree.
 
-Use 导出 (Export) and 导入 (Import) to move rules between browsers or Chrome
+Use **Export** and **Import** to move rules between browsers or Chrome
 profiles, which do not sync `chrome.storage.local`. Export also fills a textarea,
 so it still works when clipboard access is denied. Import merges and never
 overwrites existing rules.
 
 ### Privacy controls
 
-All three toggles are in 设置 (Settings):
+All three toggles are in **Settings**:
 
-- **WebRTC 防泄漏 (WebRTC leak protection)** — stops WebRTC from revealing the real
+- **WebRTC leak protection** — stops WebRTC from revealing the real
   IP around the proxy. It can stay enabled while the VPN is off.
-- **DNS 预解析防护 (DNS prefetch protection)** — disables DNS prefetch only for
+- **DNS prefetch protection** — disables DNS prefetch only for
   pages that actually use the VPN. Directly connected pages keep Chromium's normal
   prefetch and preconnect behaviour.
-- **区域隐私保护 (Region privacy protection)** — aligns language, time zone, and
+- **Region privacy protection** — aligns language, time zone, and
   reported location with the exit region, and masks CJK font probing. It applies
   only to sites that use the VPN; explicitly exempted sites keep the browser's
   native environment.
 
 ### Checking usage
 
-In 设置 (Settings), under 本月用量 (This month's usage), click 查询 (Query) to see
+In **Settings**, under **Usage this month**, click **Check** to see
 the plan, data used, data remaining, and the reset time. The figures are computed
 by Mozilla's server. A short-lived OAuth access token is minted for the query and
 destroyed immediately afterwards; it is not written to disk.
 
 ### Uninstalling
 
-- **删除本地组件 (Delete local components)** removes the local runtime: the private
+- **Delete local component** removes the local runtime: the private
   Python packages, credentials, logs, native helper, and the Native Messaging
   registry entries. The extension stays loaded.
-- **完整卸载 (Full uninstall)** runs the same cleanup and then removes the
+- **Full uninstall** runs the same cleanup and then removes the
   extension itself.
 - Deleting the whole project folder removes every local program and data file
   belonging to this project. One harmless registry pointer may remain; it points
@@ -201,7 +201,7 @@ destroyed immediately afterwards; it is not written to disk.
 
 Chromium provides no extension-uninstall hook that can run a local program, so
 removing the extension straight from `chrome://extensions` cannot reliably ask the
-helper to clean up afterwards. Prefer **完整卸载** inside the popup.
+helper to clean up afterwards. Prefer **Full uninstall** inside the popup.
 
 Do not delete the `tokens` directory to repair a problem. Credentials live there
 and are preserved across repairs.
@@ -224,7 +224,7 @@ processes, so silence has several possible causes:
 ### The browser-login button is disabled
 
 Playwright or its Firefox build is missing from the local runtime. Only browser
-login is affected. Use **从 Firefox 导入** in the meantime, or re-run the setup
+login is affected. Use **Import from Firefox** in the meantime, or re-run the setup
 script to install the missing components.
 
 ### ERR_PROXY_CONNECTION_FAILED
@@ -241,8 +241,8 @@ directory to repair this error.
 ### Credentials stopped working
 
 If Mozilla invalidated the session — a password change is the usual cause — run
-**浏览器登录** once more. The popup shows a one-line credential freshness hint
-derived from sanitized renewal state; it never contains secret material.
+**Sign in via browser** once more. The popup shows a one-line credential freshness
+hint derived from sanitized renewal state; it never contains secret material.
 
 ### Where the logs are
 
@@ -253,4 +253,7 @@ derived from sanitized renewal state; it never contains secret material.
 | `runtime\logs\bootstrap-login.log` | Full transcript of the browser-login child process. |
 
 These files live in the separately installed local runtime, not in this
-repository. None of them contains passwords or verification codes.
+repository, and all three sit in the same `runtime\logs\` directory. None of them
+contains passwords or verification codes. The current login flow captures no
+screenshots; the `bootstrap_after_*.png` filenames that appear in the cleanup list
+only remove leftovers from older builds.
