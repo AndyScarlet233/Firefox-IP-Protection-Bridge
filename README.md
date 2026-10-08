@@ -103,24 +103,30 @@ The raw account session token is never handed back to the extension page or to
 There are two ways to end up with a working install. Both start from the same
 code; they differ only in who builds the runtime.
 
-### Option 1 — a release package (if one is published)
+### Option 1 — a prebuilt bridge executable
 
-If this project publishes a release package, download it and follow the
-instructions shipped inside it. Such a package includes a prebuilt runtime and a
-setup script that copies the runtime to the fixed per-user location, installs the
-optional browser-login dependencies, and registers the Native Messaging host.
-This repository does not contain that package, and no release is asserted to
-exist.
+The bridge has to be a single `.exe` because Chrome starts a native host by
+executable path and cannot pass it a script argument. Pushing a `v*` tag runs
+[`.github/workflows/build-bridge.yml`](.github/workflows/build-bridge.yml), which
+freezes it on a Windows runner, talks to the result over the real Native
+Messaging protocol, and attaches `vpn_bridge_host.exe` and `bridge-build.json` to
+the release. Downloading those two files avoids needing a Windows build
+toolchain; you still assemble the runtime and register the host as in option 2.
 
-### Option 2 — from this source checkout
+The workflow can also be run on demand from the Actions tab, which produces the
+same files as a downloadable build artifact.
+
+### Option 2 — build it yourself
 
 This repository is intended for source review and for loading the unpacked
-extension. Building the runtime is a separate, reviewed step described in
+extension. Building the runtime is a separate step described in
 [`docs/BUILD.md`](docs/BUILD.md).
 
-1. **Build the runtime.** Follow [`docs/BUILD.md`](docs/BUILD.md). The repair
-   script refuses to run against a source-only checkout: Chrome's Native
-   Messaging manifest points at a single executable, so a built
+1. **Build the runtime.** Either run
+   `python -m PyInstaller --noconfirm --clean --distpath dist --workpath build tools/bridge-rebuild/vpn_bridge_host.spec`
+   locally, or download the artifact described in option 1. The repair script
+   refuses to run against a source-only checkout: Chrome's Native Messaging
+   manifest points at a single executable, so a built
    `runtime\vpn_bridge_host.exe` must exist first.
 2. **Register the Native Messaging host.** Run `INSTALL-OR-REPAIR.cmd` in the
    repository root, or `scripts/install-or-repair.ps1` directly from PowerShell.

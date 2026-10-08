@@ -86,20 +86,26 @@ Firefox IP 保护是 Mozilla VPN 的一项功能，把浏览器流量经由 Fast
 
 有两条路径可以得到可用的安装。两者都源自同一份代码，区别只在于由谁构建运行时。
 
-### 方式一 —— 发行包（若已发布）
+### 方式一 —— 直接取预编译的桥接程序
 
-如果本项目发布了发行包，下载后按包内自带说明安装即可。这类包内含预构建的运行时，以及
-一个安装脚本：它把运行时复制到固定的每用户目录、安装可选的浏览器登录依赖，并注册
-Native Messaging 宿主。本仓库不含该发行包，也不声称已有发行版本存在。
+桥接必须是一个单独的 `.exe`：Chrome 按可执行文件路径启动本地宿主，无法给它传脚本参数。
+推送 `v*` 标签会触发 [`.github/workflows/build-bridge.yml`](.github/workflows/build-bridge.yml)，
+在 Windows runner 上把它冻结成单文件、用真实的 Native Messaging 协议与产物对话验证，
+然后把 `vpn_bridge_host.exe` 与 `bridge-build.json` 附到 Release 上。下载这两个文件即可
+免去自备 Windows 构建工具链；运行时目录的组装与宿主注册仍按方式二进行。
 
-### 方式二 —— 从本源码检出开始
+该工作流也可在 Actions 页面手动触发，产物同样以构建附件的形式提供下载。
 
-本仓库的用途是源码审查与加载未打包扩展。构建运行时是另一道需要审查的独立步骤，详见
+### 方式二 —— 自行构建
+
+本仓库的用途是源码审查与加载未打包扩展。构建运行时是独立的一步，详见
 [`docs/BUILD.md`](docs/BUILD.md)。
 
-1. **构建运行时。** 按 [`docs/BUILD.md`](docs/BUILD.md) 操作。修复脚本会拒绝在纯源码
-   检出上运行：Chrome 的 Native Messaging 清单只指向单个可执行文件，因此必须先有构建
-   好的 `runtime\vpn_bridge_host.exe`。
+1. **构建运行时。** 本地执行
+   `python -m PyInstaller --noconfirm --clean --distpath dist --workpath build tools/bridge-rebuild/vpn_bridge_host.spec`，
+   或直接下载方式一所述的构建附件。修复脚本会拒绝在纯源码检出上运行：Chrome 的
+   Native Messaging 清单只指向单个可执行文件，因此必须先有构建好的
+   `runtime\vpn_bridge_host.exe`。
 2. **注册 Native Messaging 宿主。** 在仓库根目录运行 `INSTALL-OR-REPAIR.cmd`，或直接
    在 PowerShell 中运行 `scripts/install-or-repair.ps1`。它会把宿主清单写到已构建的
    可执行文件旁，并在 `HKCU` 下为 Chrome、Edge、Chromium 和 Brave 注册。它会先停止
