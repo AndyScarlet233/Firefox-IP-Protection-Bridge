@@ -314,12 +314,40 @@ $(Split-Path -Leaf $manifestPath) 是基于另一版源码构建的，冻结的�
                 # pip --target installs are not on sys.path, so the playwright CLI
                 # needs PYTHONPATH pointed at the packages directory. The browser
                 # is pinned inside the runtime so removing the runtime removes it.
+                # The CDN closes connections fairly often, so retry before giving
+                # up: the browser is a separate ~80 MB download from the package.
                 $env:PYTHONPATH = $StablePackages
                 $env:PLAYWRIGHT_BROWSERS_PATH = $PlaywrightBrowsersDir
-                & $pythonPath -m playwright install firefox 2>&1 | Out-String | Write-Log
+                for ($attempt = 1; $attempt -le 3; $attempt++) {
+                    $pwOutput = & $pythonPath -m playwright install firefox 2>&1 | Out-String
+                    Write-Log ("playwright install firefox (attempt $attempt)`n" + $pwOutput)
+                    if ($pwOutput -notmatch "Download failed|server closed connection|ECONNRESET|Timeout") { break }
+                    if ($attempt -lt 3) {
+                        Write-Warn2 (T "  the browser download was interrupted; retrying" "  浏览器下载被中断，正在重试")
+                        Start-Sleep -Seconds 5
+                    }
+                }
                 Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
                 Remove-Item Env:PLAYWRIGHT_BROWSERS_PATH -ErrorAction SilentlyContinue
-                if (Test-Path -LiteralPath (Join-Path $StablePackages "playwright")) { $bootstrapReady = $true }
+                $browserExe = Get-ChildItem -LiteralPath $PlaywrightBrowsersDir -Recurse -Filter "firefox.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ((Test-Path -LiteralPath (Join-Path $StablePackages "playwright")) -and $browserExe) {
+                    $bootstrapReady = $true
+                } elseif (Test-Path -LiteralPath (Join-Path $StablePackages "playwright")) {
+                    # The bridge reports the browser-login capability from the
+                    # presence of the playwright package alone, so a package
+                    # without its browser would leave the popup offering a button
+                    # that cannot work. Remove the half-installed component so the
+                    # reported capability matches reality; rerunning this script
+                    # reinstalls both.
+                    Write-Warn2 (T "the Playwright package installed but its Firefox build did not download; removing the partial component" "Playwright 包已安装，但它的 Firefox 构建未下载完成；正在移除这个半成品组件")
+                    foreach ($stray in @("playwright", "pyee", "greenlet")) {
+                        Remove-Item -LiteralPath (Join-Path $StablePackages $stray) -Recurse -Force -ErrorAction SilentlyContinue
+                        # pip leaves the metadata behind; a .dist-info without its
+                        # package would make the next install look satisfied.
+                        Get-ChildItem -LiteralPath $StablePackages -Directory -Filter "$stray-*.dist-info" -ErrorAction SilentlyContinue |
+                            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                }
             }
         } catch {
             Write-Log ("browser-login component failed: " + $_.Exception.Message)
