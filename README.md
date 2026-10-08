@@ -398,6 +398,12 @@ upstream commit or archive hash.
 
 ## Status
 
-This remains a prototype. The source, manifest, and native-message framing can be
-reviewed here, but the complete Windows Chromium + Native Messaging + Mozilla
-Guardian/Fastly path still requires real Windows and real-account testing.
+This is an unofficial prototype: no signed release artifact is published and the
+repository ships source only, so loading `extension/` on its own gives a UI
+preview until a native host is built and registered (see
+[`docs/BUILD.md`](docs/BUILD.md)).
+
+The credential, renewal and tunnel paths have been exercised end to end on 64-bit
+Windows against a real eligible Mozilla account, including the browser login with
+its image captcha and its email confirmation code. You should still validate them
+against your own account, network and browser before relying on them.

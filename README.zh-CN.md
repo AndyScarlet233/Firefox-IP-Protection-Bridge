@@ -319,5 +319,9 @@ Mozilla、Firefox IP 保护、Fastly 及相关标识仅用于描述互操作性�
 
 ## 现状
 
-本项目仍是原型。源码、清单与原生消息帧格式可以在此审查，但完整的 Windows Chromium +
-Native Messaging + Mozilla Guardian/Fastly 链路仍需在真实 Windows 环境与真实账号上测试。
+本项目仍是非官方原型：没有发布签名的发行包，仓库只保存源码，因此在构建并注册本地 host
+之前，单独加载 `extension/` 只能看到界面预览（见 [`docs/BUILD.md`](docs/BUILD.md)）。
+
+凭据获取、自动续期与隧道链路已在 64 位 Windows 上针对真实的合格 Mozilla 账号完整跑通，
+包括带图片验证码与邮件确认码的浏览器登录。但在依赖它之前，仍建议你在自己的账号、网络与
+浏览器上验证一遍。

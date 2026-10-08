@@ -2,10 +2,15 @@
 """Check that every i18n key used by the extension exists in both catalogues.
 
 Reads the extension sources, collects every key referenced through
-`chrome.i18n.getMessage("key")`, the `t("key")` helper, and the
-`__MSG_key__` placeholders Chrome substitutes in manifest.json / popup.html,
-then asserts that _locales/en (the default locale) and _locales/zh_CN define
-exactly the same set of keys and that no referenced key is missing.
+`chrome.i18n.getMessage("key")`, the local `t("key")` helper, the
+`data-i18n*` attributes that popup.js resolves at startup, and the
+`__MSG_key__` placeholders Chrome substitutes in manifest.json, then asserts
+that _locales/en (the default locale) and _locales/zh_CN define exactly the
+same set of keys and that no referenced key is missing.
+
+Chrome substitutes `__MSG_*__` only in manifest.json and CSS, never in
+extension HTML pages, which is why popup.html carries data-i18n attributes
+instead of placeholders.
 
 Run from anywhere:  python extension/check-i18n-keys.py
 Exit code 0 means every reference resolves; 1 means something is missing.
