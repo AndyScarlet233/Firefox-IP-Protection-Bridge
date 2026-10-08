@@ -1,0 +1,16 @@
+# Line endings are pinned so that a checkout is byte-identical on every platform.
+#
+# This is not cosmetic. scripts/write_bridge_build_manifest.py hashes
+# host/native_host.py into bridge-build.json, and the setup script refuses to
+# register a bridge whose recorded hash does not match the file on disk. Without
+# this file a Windows checkout (core.autocrlf=true is the Git for Windows
+# default) converts LF to CRLF and produces a different hash than a Linux
+# checkout of the same commit, so the same source would verify on one machine
+# and fail on another.
+
+* text=auto eol=lf
+
+# cmd.exe and Windows PowerShell 5.1 are happiest with CRLF, and neither is
+# part of the hashed build input.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
