@@ -10,6 +10,7 @@ const DEFAULT_STATE = {
   webRtcLeakProtection: true,
   dnsPredictionProtection: true,
   regionShieldEnabled: true,
+  fingerprintShieldEnabled: true,
   country: "REC",
   proxyMode: "allowlist",
   allowlist: [],
@@ -318,6 +319,7 @@ async function getStoredState() {
     webRtcLeakProtection: data.webRtcLeakProtection !== false,
     dnsPredictionProtection: data.dnsPredictionProtection !== false,
     regionShieldEnabled: data.regionShieldEnabled !== false,
+    fingerprintShieldEnabled: data.fingerprintShieldEnabled !== false,
     resolvedCountry: String(runtime.resolvedCountry || ""),
     country: data.country || "REC",
     proxyMode: normalizeProxyMode(data.proxyMode),
@@ -393,11 +395,20 @@ async function setAutoConnectPending(value) {
 // registered only while the region shield is actually active.
 // ---------------------------------------------------------------------------
 const VPN_HEALTH_ALARM = "vpn-health-watchdog";
-const BACKGROUND_WORK_KEYS = ["enabled", "autoConnect", "autoConnectPending", "regionShieldEnabled"];
+const BACKGROUND_WORK_KEYS = ["enabled", "autoConnect", "autoConnectPending", "regionShieldEnabled", "fingerprintShieldEnabled"];
 const REGION_SCRIPT_IDS = ["region-shield-bridge", "region-shield-main"];
 const REGION_SCRIPT_DEFS = [
   { id: "region-shield-bridge", js: ["region-shield-bridge.js"], world: "ISOLATED" },
   { id: "region-shield-main", js: ["region-shield-main.js"], world: "MAIN" }
+];
+// The fingerprint shield is deliberately independent of the tunnel: the values
+// a page can read are the same whether or not traffic is proxied, so requiring
+// the VPN to be on would leave the protection off exactly when it is not needed
+// for anything else.
+const FINGERPRINT_SCRIPT_IDS = ["fingerprint-shield-bridge", "fingerprint-shield-main"];
+const FINGERPRINT_SCRIPT_DEFS = [
+  { id: "fingerprint-shield-bridge", js: ["fingerprint-shield-bridge.js"], world: "ISOLATED" },
+  { id: "fingerprint-shield-main", js: ["fingerprint-shield-main.js"], world: "MAIN" }
 ];
 
 async function syncHealthWatchdogFor(state) {
@@ -414,7 +425,7 @@ async function syncHealthWatchdogFor(state) {
   }
 }
 
-async function injectRegionScriptsIntoOpenTabs() {
+async function injectScriptsIntoOpenTabs(defs) {
   let tabs = [];
   try { tabs = await chrome.tabs.query({}); } catch (_) { return; }
   const targets = tabs.filter((tab) => Number.isInteger(tab.id));
@@ -422,7 +433,7 @@ async function injectRegionScriptsIntoOpenTabs() {
   // Inject in small batches: with many tabs open, firing hundreds of
   // executeScript() calls at once makes the browser stutter.
   const BATCH = 6;
-  for (const def of REGION_SCRIPT_DEFS) {
+  for (const def of defs) {
     for (let i = 0; i < targets.length; i += BATCH) {
       await Promise.allSettled(targets.slice(i, i + BATCH).map((tab) => chrome.scripting.executeScript({
         target: { tabId: tab.id, allFrames: true },
@@ -434,37 +445,44 @@ async function injectRegionScriptsIntoOpenTabs() {
   }
 }
 
-async function syncRegionContentScriptsFor(state) {
+// Shared by both shields: registration only affects documents that load from
+// here on, so tabs that are already open have to be filled in explicitly.
+async function syncContentScripts(ids, defs, wanted) {
   const api = chrome.scripting;
   if (!api?.registerContentScripts || !api?.getRegisteredContentScripts) return;
-  const wanted = regionShieldIsActive(state);
   let registered = null;
   try {
     const list = await api.getRegisteredContentScripts();
-    registered = list.some((script) => REGION_SCRIPT_IDS.includes(script.id));
+    registered = list.some((script) => ids.includes(script.id));
   } catch (_) {
     return;
   }
   if (wanted === registered) return;
   if (wanted) {
-    const defs = REGION_SCRIPT_DEFS.map((def) => ({
+    const registration = defs.map((def) => ({
       id: def.id, js: def.js, matches: ["<all_urls>"],
       runAt: "document_start", allFrames: true,
       world: def.world, persistAcrossSessions: true
     }));
     try {
-      await api.registerContentScripts(defs);
+      await api.registerContentScripts(registration);
     } catch (_) {
       // One already-registered id makes the whole call fail; start clean.
-      try { await api.unregisterContentScripts({ ids: REGION_SCRIPT_IDS }); } catch (_) {}
-      try { await api.registerContentScripts(defs); } catch (_) { return; }
+      try { await api.unregisterContentScripts({ ids }); } catch (_) {}
+      try { await api.registerContentScripts(registration); } catch (_) { return; }
     }
-    // Registration only affects documents that load from here on, so tabs that
-    // are already open have to be filled in explicitly.
-    await injectRegionScriptsIntoOpenTabs();
+    await injectScriptsIntoOpenTabs(defs);
   } else {
-    try { await api.unregisterContentScripts({ ids: REGION_SCRIPT_IDS }); } catch (_) {}
+    try { await api.unregisterContentScripts({ ids }); } catch (_) {}
   }
+}
+
+async function syncRegionContentScriptsFor(state) {
+  await syncContentScripts(REGION_SCRIPT_IDS, REGION_SCRIPT_DEFS, regionShieldIsActive(state));
+}
+
+async function syncFingerprintContentScriptsFor(state) {
+  await syncContentScripts(FINGERPRINT_SCRIPT_IDS, FINGERPRINT_SCRIPT_DEFS, fingerprintShieldIsActive(state));
 }
 
 let runtimeSyncInFlight = null;
@@ -475,6 +493,7 @@ function scheduleRuntimeBackgroundSync() {
       const state = await getStoredState();
       await syncHealthWatchdogFor(state);
       await syncRegionContentScriptsFor(state);
+      await syncFingerprintContentScriptsFor(state);
     } catch (_) {
     } finally {
       runtimeSyncInFlight = null;
@@ -778,6 +797,93 @@ async function broadcastRegionContentConfig(state) {
   } catch (_) {}
   return fallback;
 }
+
+// ---------------------------------------------------------------------------
+// Fingerprint shield
+//
+// The noise a page sees must be stable for the whole of one origin's session
+// (a fingerprinter reads twice and compares, and pages that measure themselves
+// would break) but must not survive a browser restart or follow the user across
+// origins (which is the correlation being defeated). So the seed is derived
+// from a per-session random salt plus the hostname.
+// ---------------------------------------------------------------------------
+const FINGERPRINT_SALT_KEY = "fingerprintSalt";
+
+function fingerprintShieldIsActive(state) {
+  return Boolean(state?.fingerprintShieldEnabled);
+}
+
+async function fingerprintSessionSalt() {
+  try {
+    const stored = await chrome.storage.session.get(FINGERPRINT_SALT_KEY);
+    const existing = stored?.[FINGERPRINT_SALT_KEY];
+    if (typeof existing === "string" && existing) return existing;
+  } catch (_) {}
+  const bytes = new Uint8Array(16);
+  try { crypto.getRandomValues(bytes); } catch (_) { for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256); }
+  const salt = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try { await chrome.storage.session.set({ [FINGERPRINT_SALT_KEY]: salt }); } catch (_) {}
+  return salt;
+}
+
+function hashStringToInt(text) {
+  // FNV-1a, kept in 32 bits so the value survives JSON and postMessage intact.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+function fingerprintSeedForHost(salt, host) {
+  const normalized = String(host || "").toLowerCase().replace(/^www\./, "");
+  return hashStringToInt(`${salt}|${normalized}`);
+}
+
+async function fingerprintContentConfigForState(state, host = "") {
+  if (!fingerprintShieldIsActive(state)) return { active: false, seed: 0 };
+  const salt = await fingerprintSessionSalt();
+  return { active: true, seed: fingerprintSeedForHost(salt, host) };
+}
+
+async function broadcastFingerprintContentConfig(state) {
+  const active = fingerprintShieldIsActive(state);
+  let tabs = [];
+  try { tabs = await chrome.tabs.query({}); } catch (_) { return { active, seed: 0 }; }
+  const salt = active ? await fingerprintSessionSalt() : "";
+  await Promise.allSettled(tabs
+    .filter((tab) => Number.isInteger(tab.id))
+    .map((tab) => {
+      const host = hostnameFromUrl(tab.url);
+      const config = active ? { active: true, seed: fingerprintSeedForHost(salt, host) } : { active: false, seed: 0 };
+      return chrome.tabs.sendMessage(tab.id, { type: "fingerprintConfigPush", config }).catch(() => null);
+    }));
+  return { active, seed: 0 };
+}
+
+async function syncFingerprintShield(stateOverride = null) {
+  const state = stateOverride || await getStoredState();
+  await syncFingerprintContentScriptsFor(state);
+  await broadcastFingerprintContentConfig(state);
+  return { active: fingerprintShieldIsActive(state) };
+}
+
+async function setFingerprintShieldOptionNow(option, value) {
+  if (option !== "enabled") throw new Error(t("errUnknownFingerprintOption"));
+  const state = await getStoredState();
+  const fingerprintShieldEnabled = Boolean(value);
+  const next = { ...state, fingerprintShieldEnabled };
+  await syncFingerprintShield(next);
+  await saveState({ fingerprintShieldEnabled });
+  return { ok: true, fingerprintShieldEnabled };
+}
+
+async function fingerprintContentConfig(host = "") {
+  const state = await getStoredState();
+  return fingerprintContentConfigForState(state, host);
+}
+
 async function clearRegionHeaderRule() {
   if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
   try { await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds:[REGION_HEADER_RULE_ID] }); } catch (_) {}
@@ -1340,6 +1446,10 @@ function setRegionShieldOption(option, value) {
   return queueStateOperation(() => setRegionShieldOptionNow(option, value));
 }
 
+function setFingerprintShieldOption(option, value) {
+  return queueStateOperation(() => setFingerprintShieldOptionNow(option, value));
+}
+
 function setProxyMode(mode) {
   return queueStateOperation(() => setProxyModeNow(mode));
 }
@@ -1636,6 +1746,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "regionShield": return setRegionShieldOption(message.option, message.value);
       case "regionStatus": return queueStateOperation(async () => { const state = await getStoredState(); return { ok:true, region:await syncRegionShield(state) }; });
       case "regionContentConfig": return { ok:true, config:await regionContentConfig(message.host || "") };
+      case "fingerprintShield": return setFingerprintShieldOption(message.option, message.value);
+      case "fingerprintStatus": return queueStateOperation(async () => { const state = await getStoredState(); return { ok:true, fingerprint: await syncFingerprintShield(state) }; });
+      case "fingerprintContentConfig": return { ok:true, config:await fingerprintContentConfig(message.host || "") };
       case "proxyMode": return setProxyMode(message.mode);
       case "setSiteRule": return setSiteRule(message.domain, Boolean(message.useVpn));
       // The popup must never re-derive the route from the raw stored list: the

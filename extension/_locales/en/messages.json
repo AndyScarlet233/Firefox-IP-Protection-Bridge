@@ -15,7 +15,6 @@
     "message": "Firefox IP Protection Bridge (Unofficial)",
     "description": "Tooltip for the toolbar button."
   },
-
   "brandBeta": {
     "message": "BETA",
     "description": "Badge next to the product name in the popup header."
@@ -256,7 +255,6 @@
     "message": "Full uninstall",
     "description": "Button that uninstalls everything."
   },
-
   "countryUnavailable": {
     "message": "$1 (unavailable)",
     "description": "Exit-location option label for a country that has no nodes right now. $1 is the country name.",
@@ -267,7 +265,6 @@
       }
     }
   },
-
   "errBackgroundNoResponse": {
     "message": "The background service did not respond. Reload the extension and try again.",
     "description": "Error shown when the service worker cannot be reached."
@@ -574,7 +571,6 @@
     "message": "VPN is off",
     "description": "Toolbar tooltip while the VPN is disconnected."
   },
-
   "statusReading": {
     "message": "Reading status…",
     "description": "Headline while the status is being read."
@@ -661,7 +657,6 @@
     "message": "Blocklist · everything uses the VPN by default",
     "description": "Mode hint in blocklist mode with an empty list."
   },
-
   "credRefreshHint": {
     "message": "Open Firefox once, or import the sign-in state again, to refresh it.",
     "description": "Suffix explaining how to refresh stale credentials."
@@ -714,7 +709,6 @@
       }
     }
   },
-
   "webrtcActive": {
     "message": "WebRTC is blocked from using non-proxied UDP; this also applies while the VPN is off.",
     "description": "WebRTC detail when the protection is effective."
@@ -771,9 +765,18 @@
     "message": "Current profile: $1 · $2 · $3. Open pages sync automatically.",
     "description": "Current region profile summary. $1 is the country, $2 the locale, $3 the time zone.",
     "placeholders": {
-      "1": { "content": "$1", "example": "Germany" },
-      "2": { "content": "$2", "example": "de-DE" },
-      "3": { "content": "$3", "example": "Europe/Berlin" }
+      "1": {
+        "content": "$1",
+        "example": "Germany"
+      },
+      "2": {
+        "content": "$2",
+        "example": "de-DE"
+      },
+      "3": {
+        "content": "$3",
+        "example": "Europe/Berlin"
+      }
     }
   },
   "modeDescBlocklist": {
@@ -806,7 +809,6 @@
       }
     }
   },
-
   "diagRegionOff": {
     "message": "Live page check: region privacy protection is off.",
     "description": "Diagnostic line when region privacy protection is disabled."
@@ -839,10 +841,22 @@
     "message": "Live page check: $1 · $2 · $3$4",
     "description": "Live page diagnostic summary. $1 is the language, $2 the time zone, $3 the font verdict, $4 the trailing status marker.",
     "placeholders": {
-      "1": { "content": "$1", "example": "de-DE" },
-      "2": { "content": "$2", "example": "Europe/Berlin" },
-      "3": { "content": "$3", "example": "Chinese fonts are masked" },
-      "4": { "content": "$4", "example": " ✓" }
+      "1": {
+        "content": "$1",
+        "example": "de-DE"
+      },
+      "2": {
+        "content": "$2",
+        "example": "Europe/Berlin"
+      },
+      "3": {
+        "content": "$3",
+        "example": "Chinese fonts are masked"
+      },
+      "4": {
+        "content": "$4",
+        "example": " ✓"
+      }
     }
   },
   "diagOkSuffix": {
@@ -861,7 +875,6 @@
     "message": "CJK font probe ABCabc012",
     "description": "Text measured by the in-page font probe; keep it free of characters that must not leak."
   },
-
   "noticeReadingStatus": {
     "message": "Reading the VPN status…",
     "description": "Notice shown while the status is being read."
@@ -1104,17 +1117,32 @@
     "message": "Merged $1 new rule(s); the $2 now holds $3.",
     "description": "Notice shown after a successful import. $1 is the number of added rules, $2 the list kind, $3 the new total.",
     "placeholders": {
-      "1": { "content": "$1", "example": "4" },
-      "2": { "content": "$2", "example": "allowlist" },
-      "3": { "content": "$3", "example": "16" }
+      "1": {
+        "content": "$1",
+        "example": "4"
+      },
+      "2": {
+        "content": "$2",
+        "example": "allowlist"
+      },
+      "3": {
+        "content": "$3",
+        "example": "16"
+      }
     }
   },
   "noticeImportNothingNew": {
     "message": "No new rules; the $1 still holds $2.",
     "description": "Notice shown when an import adds nothing. $1 is the list kind, $2 the total.",
     "placeholders": {
-      "1": { "content": "$1", "example": "allowlist" },
-      "2": { "content": "$2", "example": "12" }
+      "1": {
+        "content": "$1",
+        "example": "allowlist"
+      },
+      "2": {
+        "content": "$2",
+        "example": "12"
+      }
     }
   },
   "noticeRuleRemoved": {
@@ -1253,9 +1281,18 @@
     "message": "Plan $1 · used $2 · left $3",
     "description": "Usage summary. $1 is the plan size, $2 the used amount, $3 the remaining amount.",
     "placeholders": {
-      "1": { "content": "$1", "example": "50.0 GB" },
-      "2": { "content": "$2", "example": "12.3 GB" },
-      "3": { "content": "$3", "example": "37.7 GB" }
+      "1": {
+        "content": "$1",
+        "example": "50.0 GB"
+      },
+      "2": {
+        "content": "$2",
+        "example": "12.3 GB"
+      },
+      "3": {
+        "content": "$3",
+        "example": "37.7 GB"
+      }
     }
   },
   "usageResetSuffix": {
@@ -1279,5 +1316,33 @@
   "confirmFullUninstall": {
     "message": "Fully uninstall Firefox IP Protection Bridge?\n\nThis turns off the VPN, deletes the local component and the credentials, and uninstalls the extension from Chrome.",
     "description": "Confirmation dialog before a full uninstall."
+  },
+  "fingerprintTitle": {
+    "message": "Fingerprint protection",
+    "description": "Title of the fingerprint-shield toggle in the privacy block."
+  },
+  "fingerprintDetailDefault": {
+    "message": "Adds per-site noise to canvas, WebGL and audio reads, and rounds CPU and memory hints.",
+    "description": "Explains the fingerprint shield before its state is known."
+  },
+  "fingerprintActive": {
+    "message": "On. Canvas, WebGL and audio reads carry per-site noise; CPU and memory hints are rounded. Font lists are not hidden: that needs browser support.",
+    "description": "Detail line while the fingerprint shield is on."
+  },
+  "fingerprintOff": {
+    "message": "Off. Pages read your real canvas, WebGL and audio values.",
+    "description": "Detail line while the fingerprint shield is off."
+  },
+  "noticeFingerprintOn": {
+    "message": "Fingerprint protection on.",
+    "description": "Notice after enabling the fingerprint shield."
+  },
+  "noticeFingerprintOff": {
+    "message": "Fingerprint protection off.",
+    "description": "Notice after disabling the fingerprint shield."
+  },
+  "errUnknownFingerprintOption": {
+    "message": "Unknown fingerprint protection option.",
+    "description": "Error for an unrecognised fingerprint-shield option."
   }
 }

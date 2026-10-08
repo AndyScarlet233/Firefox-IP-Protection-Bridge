@@ -57,6 +57,8 @@ const webRtcLeakToggle = $("webRtcLeakToggle");
 const dnsPredictionToggle = $("dnsPredictionToggle");
 const webRtcPrivacyDetail = $("webRtcPrivacyDetail");
 const dnsPrivacyDetail = $("dnsPrivacyDetail");
+const fingerprintShieldToggle = $("fingerprintShieldToggle");
+const fingerprintShieldDetail = $("fingerprintShieldDetail");
 const regionShieldToggle = $("regionShieldToggle");
 const regionShieldDetail = $("regionShieldDetail");
 const regionProfileText = $("regionProfileText");
@@ -288,7 +290,7 @@ function formatUsageText(value) {
 
 function setBusy(value) {
   busy = value;
-  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, bootstrapLogin, openFolder, removeLocal, fullUninstall, copyRules, toggleRuleImport, confirmRuleImport, copyFromBox, clearRuleImport, ruleImportText, bootstrapEmail, bootstrapPassword, bootstrapStart, bootstrapFormCancel, bootstrapCodeInput, bootstrapCaptchaInput, bootstrapChallengeSubmit]) {
+  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, fingerprintShieldToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, bootstrapLogin, openFolder, removeLocal, fullUninstall, copyRules, toggleRuleImport, confirmRuleImport, copyFromBox, clearRuleImport, ruleImportText, bootstrapEmail, bootstrapPassword, bootstrapStart, bootstrapFormCancel, bootstrapCodeInput, bootstrapCaptchaInput, bootstrapChallengeSubmit]) {
     if (el) el.disabled = value;
   }
 }
@@ -418,7 +420,14 @@ function renderSettings() {
   autoConnectToggle.checked = Boolean(state.autoConnect);
   webRtcLeakToggle.checked = Boolean(state.webRtcLeakProtection);
   dnsPredictionToggle.checked = Boolean(state.dnsPredictionProtection);
+  fingerprintShieldToggle.checked = Boolean(state.fingerprintShieldEnabled);
   regionShieldToggle.checked = Boolean(state.regionShieldEnabled);
+
+  // The fingerprint shield runs independently of the tunnel, so its detail line
+  // never reports a "standby" state the way the route-scoped toggles do.
+  fingerprintShieldDetail.textContent = state.fingerprintShieldEnabled
+    ? t("fingerprintActive")
+    : t("fingerprintOff");
 
   const rtc = privacyStatus?.webRtc;
   if (state.webRtcLeakProtection && rtc?.supported && rtc.effective === "disable_non_proxied_udp") {
@@ -806,6 +815,21 @@ async function changePrivacyOption(option, desired) {
 
 webRtcLeakToggle.addEventListener("change", () => changePrivacyOption("webRtcLeakProtection", webRtcLeakToggle.checked));
 dnsPredictionToggle.addEventListener("change", () => changePrivacyOption("dnsPredictionProtection", dnsPredictionToggle.checked));
+
+fingerprintShieldToggle.addEventListener("change", async () => {
+  const desired = fingerprintShieldToggle.checked;
+  fingerprintShieldToggle.disabled = true;
+  try {
+    const response = await send({ type:"fingerprintShield", option:"enabled", value:desired });
+    state.fingerprintShieldEnabled = Boolean(response.fingerprintShieldEnabled);
+    showNotice(state.fingerprintShieldEnabled
+      ? t("noticeFingerprintOn")
+      : t("noticeFingerprintOff"), "good");
+  } catch (error) {
+    fingerprintShieldToggle.checked = Boolean(state.fingerprintShieldEnabled);
+    showNotice(error.message, "error");
+  } finally { fingerprintShieldToggle.disabled = false; renderSettings(); }
+});
 
 regionShieldToggle.addEventListener("change", async () => {
   const desired = regionShieldToggle.checked;

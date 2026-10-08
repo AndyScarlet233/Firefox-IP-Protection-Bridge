@@ -15,7 +15,6 @@
     "message": "火狐 VPN",
     "description": "工具栏按钮的悬停提示。"
   },
-
   "brandBeta": {
     "message": "测试版",
     "description": "弹窗标题栏中产品名旁的标记。"
@@ -256,7 +255,6 @@
     "message": "完整卸载",
     "description": "完整卸载全部内容的按钮。"
   },
-
   "countryUnavailable": {
     "message": "$1（不可用）",
     "description": "当前没有节点的出口位置选项文案。$1 为国家名。",
@@ -267,7 +265,6 @@
       }
     }
   },
-
   "errBackgroundNoResponse": {
     "message": "后台服务未响应，请重新加载扩展后再试。",
     "description": "无法连接后台服务时显示的错误。"
@@ -574,7 +571,6 @@
     "message": "VPN 已关闭",
     "description": "VPN 未连接时工具栏按钮的悬停提示。"
   },
-
   "statusReading": {
     "message": "正在读取状态…",
     "description": "正在读取状态时显示的标题。"
@@ -661,7 +657,6 @@
     "message": "黑名单 · 默认全走 VPN",
     "description": "黑名单模式下列表为空时的模式提示。"
   },
-
   "credRefreshHint": {
     "message": "打开一次 Firefox 或重新导入即可刷新。",
     "description": "说明如何刷新过期凭据的后缀。"
@@ -714,7 +709,6 @@
       }
     }
   },
-
   "webrtcActive": {
     "message": "已阻止 WebRTC 使用非代理 UDP；VPN 关闭时也继续生效。",
     "description": "WebRTC 防护生效时的说明。"
@@ -771,9 +765,18 @@
     "message": "当前配置：$1 · $2 · $3。已打开网页会自动同步。",
     "description": "当前区域配置摘要。$1 为国家，$2 为区域设置，$3 为时区。",
     "placeholders": {
-      "1": { "content": "$1", "example": "德国" },
-      "2": { "content": "$2", "example": "de-DE" },
-      "3": { "content": "$3", "example": "Europe/Berlin" }
+      "1": {
+        "content": "$1",
+        "example": "德国"
+      },
+      "2": {
+        "content": "$2",
+        "example": "de-DE"
+      },
+      "3": {
+        "content": "$3",
+        "example": "Europe/Berlin"
+      }
     }
   },
   "modeDescBlocklist": {
@@ -806,7 +809,6 @@
       }
     }
   },
-
   "diagRegionOff": {
     "message": "当前网页实测：区域隐私保护已关闭。",
     "description": "区域隐私保护关闭时的实测行。"
@@ -839,10 +841,22 @@
     "message": "当前网页实测：$1 · $2 · $3$4",
     "description": "网页实测摘要。$1 为语言，$2 为时区，$3 为字体结论，$4 为结尾状态标记。",
     "placeholders": {
-      "1": { "content": "$1", "example": "de-DE" },
-      "2": { "content": "$2", "example": "Europe/Berlin" },
-      "3": { "content": "$3", "example": "中文字体已遮罩" },
-      "4": { "content": "$4", "example": " ✓" }
+      "1": {
+        "content": "$1",
+        "example": "de-DE"
+      },
+      "2": {
+        "content": "$2",
+        "example": "Europe/Berlin"
+      },
+      "3": {
+        "content": "$3",
+        "example": "中文字体已遮罩"
+      },
+      "4": {
+        "content": "$4",
+        "example": " ✓"
+      }
     }
   },
   "diagOkSuffix": {
@@ -861,7 +875,6 @@
     "message": "中文字体检测ABCabc012",
     "description": "页面内字体探测所测量的文本；请保持其不含不得泄漏的字符。"
   },
-
   "noticeReadingStatus": {
     "message": "正在读取 VPN 状态…",
     "description": "正在读取状态时显示的提示。"
@@ -1104,17 +1117,32 @@
     "message": "已合并 $1 条新规则，$2现有 $3 条。",
     "description": "导入成功后显示的提示。$1 为新增规则数，$2 为列表种类，$3 为新的总数。",
     "placeholders": {
-      "1": { "content": "$1", "example": "4" },
-      "2": { "content": "$2", "example": "白名单" },
-      "3": { "content": "$3", "example": "16" }
+      "1": {
+        "content": "$1",
+        "example": "4"
+      },
+      "2": {
+        "content": "$2",
+        "example": "白名单"
+      },
+      "3": {
+        "content": "$3",
+        "example": "16"
+      }
     }
   },
   "noticeImportNothingNew": {
     "message": "没有新规则，$1仍是 $2 条。",
     "description": "导入未新增任何规则时显示的提示。$1 为列表种类，$2 为总数。",
     "placeholders": {
-      "1": { "content": "$1", "example": "白名单" },
-      "2": { "content": "$2", "example": "12" }
+      "1": {
+        "content": "$1",
+        "example": "白名单"
+      },
+      "2": {
+        "content": "$2",
+        "example": "12"
+      }
     }
   },
   "noticeRuleRemoved": {
@@ -1253,9 +1281,18 @@
     "message": "套餐 $1 · 已使用 $2 · 剩余 $3",
     "description": "用量摘要。$1 为套餐额度，$2 为已用额度，$3 为剩余额度。",
     "placeholders": {
-      "1": { "content": "$1", "example": "50.0 GB" },
-      "2": { "content": "$2", "example": "12.3 GB" },
-      "3": { "content": "$3", "example": "37.7 GB" }
+      "1": {
+        "content": "$1",
+        "example": "50.0 GB"
+      },
+      "2": {
+        "content": "$2",
+        "example": "12.3 GB"
+      },
+      "3": {
+        "content": "$3",
+        "example": "37.7 GB"
+      }
     }
   },
   "usageResetSuffix": {
@@ -1279,5 +1316,33 @@
   "confirmFullUninstall": {
     "message": "完整卸载 Firefox IP Protection Bridge？\n\n这会关闭 VPN、删除本地组件和凭据，并从 Chrome 卸载扩展。",
     "description": "完整卸载前的确认对话框。"
+  },
+  "fingerprintTitle": {
+    "message": "指纹保护",
+    "description": "隐私区块中指纹保护开关的标题。"
+  },
+  "fingerprintDetailDefault": {
+    "message": "对 Canvas、WebGL、音频读取加入按站点扰动的噪声，并对 CPU 与内存提示做归一化。",
+    "description": "指纹保护状态未知时的说明文案。"
+  },
+  "fingerprintActive": {
+    "message": "已开启。Canvas、WebGL、音频读取带按站点噪声，CPU 与内存提示已归一化。字体列表无法隐藏——那需要浏览器内核支持。",
+    "description": "指纹保护开启时的说明文案。"
+  },
+  "fingerprintOff": {
+    "message": "已关闭。网页会读到真实的 Canvas、WebGL 与音频值。",
+    "description": "指纹保护关闭时的说明文案。"
+  },
+  "noticeFingerprintOn": {
+    "message": "指纹保护已开启。",
+    "description": "开启指纹保护后的提示。"
+  },
+  "noticeFingerprintOff": {
+    "message": "指纹保护已关闭。",
+    "description": "关闭指纹保护后的提示。"
+  },
+  "errUnknownFingerprintOption": {
+    "message": "未知的指纹保护选项。",
+    "description": "无法识别的指纹保护选项错误。"
   }
 }
