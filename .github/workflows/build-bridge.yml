@@ -1,0 +1,123 @@
+name: Build native bridge
+
+# Chrome starts a native messaging host by executable path and cannot pass a
+# script argument, so host/native_host.py must be frozen into a single .exe
+# before it can be registered at all. This workflow produces that artifact,
+# proves it answers the real stdio protocol, and records the hashes that the
+# Windows setup script verifies before registering it.
+#
+# Tagging a release (v1.1.0 and up) attaches the executable to a GitHub Release,
+# so a user does not need a Windows build toolchain to obtain it.
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "host/**"
+      - "tools/bridge-rebuild/**"
+      - "scripts/smoke_native_host.py"
+      - "scripts/write_bridge_build_manifest.py"
+      - ".github/workflows/build-bridge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-bridge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Freeze vpn_bridge_host.exe
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install --disable-pip-version-check "pyinstaller>=6.0"
+
+      - name: Freeze the bridge
+        run: >-
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --distpath dist
+          --workpath build
+          tools/bridge-rebuild/vpn_bridge_host.spec
+
+      - name: Fail if the executable was not produced
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/vpn_bridge_host.exe)) {
+            Write-Error "PyInstaller did not produce dist/vpn_bridge_host.exe"
+            exit 1
+          }
+          $size = (Get-Item dist/vpn_bridge_host.exe).Length
+          Write-Host "built dist/vpn_bridge_host.exe ($([math]::Round($size/1MB,2)) MB)"
+          if ($size -lt 1MB) {
+            Write-Error "the executable is implausibly small; the freeze probably failed"
+            exit 1
+          }
+
+      # A frozen binary can build cleanly and still die on startup, so talk to it
+      # over the same framing Chrome uses instead of trusting the build log.
+      - name: Smoke-test the frozen host
+        run: python scripts/smoke_native_host.py dist/vpn_bridge_host.exe
+
+      - name: Write bridge-build.json
+        run: >-
+          python scripts/write_bridge_build_manifest.py
+          dist/vpn_bridge_host.exe
+          --out dist/bridge-build.json
+
+      - name: Show the recorded hashes
+        shell: pwsh
+        run: Get-Content dist/bridge-build.json
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpn_bridge_host
+          if-no-files-found: error
+          path: |
+            dist/vpn_bridge_host.exe
+            dist/bridge-build.json
+
+  release:
+    name: Attach the build to the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the build
+        uses: actions/download-artifact@v4
+        with:
+          name: vpn_bridge_host
+          path: dist
+
+      - name: Publish the release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/vpn_bridge_host.exe
+            dist/bridge-build.json
+          body: |
+            Frozen `vpn_bridge_host.exe` and the `bridge-build.json` that records
+            the source and executable hashes.
+
+            Download both files, then follow the repository README to register the
+            host. The executable is unsigned, so Windows SmartScreen may warn on
+            first run; verify `executableSha256` in `bridge-build.json` if you want
+            to confirm the download.
+          fail_on_unmatched_files: true
