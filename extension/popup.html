@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7,27 +7,34 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <!--
+    Chrome does not substitute __MSG_*__ placeholders in extension HTML pages
+    (only manifest.json and CSS), so every static string carries a data-i18n*
+    attribute and popup.js fills it in before the first render. Elements that
+    mix an icon with a label wrap the label in a span: setting textContent on
+    the button itself would delete the inline SVG.
+  -->
   <main class="panel">
     <header class="topbar">
       <span class="spacer"></span>
-      <div class="brand"><strong>VPN</strong><span class="beta">测试版</span></div>
-      <button id="infoButton" class="circle-button" title="帮助与状态" aria-label="帮助与状态">i</button>
+      <div class="brand"><strong>VPN</strong><span class="beta" data-i18n="brandBeta"></span></div>
+      <button id="infoButton" class="circle-button" data-i18n-title="infoButtonTitle" data-i18n-aria-label="infoButtonTitle">i</button>
     </header>
 
     <section id="connectionCard" class="connection-card off">
       <div class="status-line">
         <div>
-          <div id="headline" class="headline">VPN 已关闭</div>
-          <div id="modeHint" class="mode-hint">白名单模式</div>
+          <div id="headline" class="headline" data-i18n="headlineOff"></div>
+          <div id="modeHint" class="mode-hint" data-i18n="modeAllowlist"></div>
         </div>
         <div id="statusMark" class="status-mark" aria-hidden="true">✓</div>
       </div>
-      <button id="power" class="power-button">开启 VPN</button>
+      <button id="power" class="power-button" data-i18n="powerOn"></button>
       <button id="locationButton" class="location-button">
-        <span id="locationText">位置：推荐</span><span class="chevron">›</span>
+        <span id="locationText" data-i18n="locationLabel"></span><span class="chevron">›</span>
       </button>
-      <select id="country" class="country-select" aria-label="VPN 位置">
-        <option value="REC">推荐（自动）</option>
+      <select id="country" class="country-select" data-i18n-aria-label="countrySelectAria">
+        <option value="REC" data-i18n="locationRec"></option>
       </select>
     </section>
 
@@ -37,100 +44,126 @@
         <path class="shield-check" d="m8.2 12.1 2.3 2.35 5.25-5.35"/>
       </svg>
       <div class="site-copy">
-        <div class="site-title">为此网站使用 VPN</div>
-        <div id="currentSite" class="site-subtitle">打开网页后可单独设置</div>
+        <div class="site-title" data-i18n="siteRowTitle"></div>
+        <div id="currentSite" class="site-subtitle" data-i18n="siteNoPage"></div>
       </div>
       <label class="switch"><input id="siteToggle" type="checkbox"><span class="slider"></span></label>
     </section>
 
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
-    <button id="settingsButton" class="settings-row"><span class="gear">⚙</span><span>设置</span><span id="settingsSummary" class="settings-summary">白名单</span><span class="settings-chevron">›</span></button>
+    <button id="settingsButton" class="settings-row"><span class="gear">⚙</span><span data-i18n="settingsRow"></span><span id="settingsSummary" class="settings-summary" data-i18n="modeAllowlist"></span><span class="settings-chevron">›</span></button>
 
     <section id="settingsPanel" class="settings-panel" hidden>
       <div class="setting-block">
-        <div class="setting-label">代理模式</div>
+        <div class="setting-label" data-i18n="proxyModeLabel"></div>
         <div class="segmented">
-          <button id="modeAllowlist" data-mode="allowlist" class="segment active">白名单</button>
-          <button id="modeBlacklist" data-mode="blacklist" class="segment">黑名单</button>
+          <button id="modeAllowlist" data-mode="allowlist" class="segment active" data-i18n="modeAllowlist"></button>
+          <button id="modeBlacklist" data-mode="blacklist" class="segment" data-i18n="modeBlacklist"></button>
         </div>
-        <p id="modeDescription" class="help">只有白名单里的网站走 VPN，其余网站保持直连。</p>
+        <p id="modeDescription" class="help" data-i18n="modeDescAllowlist"></p>
       </div>
 
       <div class="setting-block compact startup-block">
         <div class="setting-head">
           <div>
-            <div class="setting-label">启动时自动连接</div>
-            <div class="detail startup-detail">启动 Chrome 后先启动本地组件，确认代理就绪后再接管流量。</div>
+            <div class="setting-label" data-i18n="autoConnectLabel"></div>
+            <div class="detail startup-detail" data-i18n="autoConnectDetail"></div>
           </div>
           <label class="switch"><input id="autoConnectToggle" type="checkbox"><span class="slider"></span></label>
         </div>
-        <p class="help">连接失败时会保持直连，不会阻断浏览器网络。</p>
+        <p class="help" data-i18n="autoConnectHelp"></p>
       </div>
 
       <div class="setting-block compact privacy-block">
-        <div class="setting-label">隐私保护</div>
+        <div class="setting-label" data-i18n="privacyProtectionLabel"></div>
         <div class="privacy-row">
           <div class="privacy-copy">
-            <div class="privacy-title">WebRTC 防泄漏</div>
-            <div id="webRtcPrivacyDetail" class="detail">阻止 WebRTC 绕过代理暴露真实 IP；VPN 关闭时也可以继续保护。</div>
+            <div class="privacy-title" data-i18n="webrtcTitle"></div>
+            <div id="webRtcPrivacyDetail" class="detail" data-i18n="webrtcDetailDefault"></div>
           </div>
           <label class="switch"><input id="webRtcLeakToggle" type="checkbox"><span class="slider"></span></label>
         </div>
         <div class="privacy-row">
           <div class="privacy-copy">
-            <div class="privacy-title">DNS 预解析防护</div>
-            <div id="dnsPrivacyDetail" class="detail">只对实际走 VPN 的页面关闭 DNS 预解析；直连页面保留 Chrome 原本的预解析与预连接加速。</div>
+            <div class="privacy-title" data-i18n="dnsTitle"></div>
+            <div id="dnsPrivacyDetail" class="detail" data-i18n="dnsDetailDefault"></div>
           </div>
           <label class="switch"><input id="dnsPredictionToggle" type="checkbox"><span class="slider"></span></label>
         </div>
         <div class="privacy-row privacy-row-last region-row">
           <div class="privacy-copy">
-            <div class="privacy-title">区域隐私保护</div>
-            <div id="regionShieldDetail" class="detail">仅对实际走 VPN 的网站对齐语言、时区与出口地区；明确豁免的网站保持浏览器原生环境。</div>
-            <div id="regionProfileText" class="detail region-profile-text">当前配置将在 VPN 连接后自动生成。</div>
-            <div id="regionPageDiagText" class="detail region-profile-text">当前网页实测：等待检测。</div>
+            <div class="privacy-title" data-i18n="regionTitle"></div>
+            <div id="regionShieldDetail" class="detail" data-i18n="regionDetailDefault"></div>
+            <div id="regionProfileText" class="detail region-profile-text" data-i18n="regionProfilePending"></div>
+            <div id="regionPageDiagText" class="detail region-profile-text" data-i18n="regionPageDiagPending"></div>
           </div>
           <label class="switch"><input id="regionShieldToggle" type="checkbox"><span class="slider"></span></label>
         </div>
-        <p class="help">开启后只对实际走 VPN 的普通网页生效：调整 Accept-Language、navigator.language(s)、Intl 默认区域/时区与时区偏移，阻止精确定位，并遮罩常见中文字体的 Canvas/FontFaceSet 可用性探测。直连网站保持浏览器原生语言/时区环境。</p>
-        <p class="help">WebRTC 防护可能让部分语音/视频通话退化为 TCP 或无法建立直连。实际网页域名通过 SOCKS5 时仍由代理端解析。</p>
+        <p class="help" data-i18n="regionHelp"></p>
+        <p class="help" data-i18n="webrtcHelp"></p>
       </div>
 
       <div class="setting-block">
-        <div class="setting-head"><span id="listTitle" class="setting-label">不使用 VPN 的网站</span><span id="siteCount" class="count">0</span></div>
-        <div class="add-domain"><input id="domainInput" type="text" inputmode="url" placeholder="example.com"><button id="addDomain">添加</button></div>
-        <div id="domainList" class="domain-list"><div class="empty">还没有网站</div></div>
-        <p class="help">规则包含该域名及其子域名；ChatGPT、Claude、Bilibili 等已知站点族会自动扩展核心域名。未识别的第三方 CDN 仍需单独添加。</p>
+        <div class="setting-head"><span id="listTitle" class="setting-label" data-i18n="listTitleAllowlist"></span><span id="siteCount" class="count">0</span></div>
+        <div class="add-domain"><input id="domainInput" type="text" inputmode="url" data-i18n-placeholder="domainInputPlaceholder"><button id="addDomain" data-i18n="addButton"></button></div>
+        <div id="domainList" class="domain-list"><div class="empty" data-i18n="domainListEmpty"></div></div>
+        <p class="help" data-i18n="domainListHelp"></p>
         <div class="rule-transfer">
-          <button id="toggleRuleImport" class="transfer-button" aria-expanded="false" aria-controls="ruleImportPanel"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>导入</button>
-          <button id="copyRules" class="transfer-button" aria-controls="ruleImportText"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9m0 0 4 4m-4-4-4 4"/><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg>导出</button>
+          <button id="toggleRuleImport" class="transfer-button" aria-expanded="false" aria-controls="ruleImportPanel"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span data-i18n="importButton"></span></button>
+          <button id="copyRules" class="transfer-button" aria-controls="ruleImportText"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V9m0 0 4 4m-4-4-4 4"/><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg><span data-i18n="exportButton"></span></button>
         </div>
         <div id="ruleImportPanel" class="rule-import" hidden>
-          <textarea id="ruleImportText" class="rule-import-box" spellcheck="false" placeholder="粘贴域名列表，每行一个；也支持 JSON 数组格式。"></textarea>
+          <textarea id="ruleImportText" class="rule-import-box" spellcheck="false" data-i18n-placeholder="ruleImportPlaceholder"></textarea>
           <div class="rule-import-actions">
-            <button id="copyFromBox" class="transfer-button" title="复制文本框内容"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>复制</button>
-            <button id="confirmRuleImport" class="transfer-button" title="把文本框内容合并进当前列表"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>导入</button>
-            <button id="clearRuleImport" class="transfer-button" title="清空文本框"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>清空</button>
+            <button id="copyFromBox" class="transfer-button" data-i18n-title="copyBoxTitle"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg><span data-i18n="copyButton"></span></button>
+            <button id="confirmRuleImport" class="transfer-button" data-i18n-title="confirmImportTitle"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span data-i18n="importButton"></span></button>
+            <button id="clearRuleImport" class="transfer-button" data-i18n-title="clearBoxTitle"><svg class="t-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span data-i18n="clearButton"></span></button>
           </div>
         </div>
       </div>
 
       <div class="setting-block compact">
-        <div class="setting-head"><span class="setting-label">Mozilla 账户</span><button id="importFirefox" class="small-button">从 Firefox 导入</button></div>
-        <div id="credentialStatus" class="detail">正在检查…</div>
-        <div id="credentialFreshness" class="detail credential-freshness" hidden></div>
+        <div class="setting-head setting-head-stacked">
+          <div class="setting-copy">
+            <div class="setting-label" data-i18n="mozillaAccountLabel"></div>
+            <div id="credentialStatus" class="detail" data-i18n="checking"></div>
+            <div id="credentialFreshness" class="detail credential-freshness" hidden></div>
+          </div>
+          <div class="setting-actions">
+            <button id="bootstrapLogin" class="small-button" data-i18n="browserLoginButton"></button>
+            <button id="importFirefox" class="small-button" data-i18n="importFirefoxButton"></button>
+          </div>
+        </div>
+        <div id="bootstrapForm" class="bootstrap-form" hidden>
+          <input type="email" id="bootstrapEmail" data-i18n-placeholder="emailPlaceholder" autocomplete="off">
+          <input type="password" id="bootstrapPassword" data-i18n-placeholder="passwordPlaceholder" autocomplete="new-password">
+          <div class="bootstrap-form-actions">
+            <button id="bootstrapStart" class="transfer-button" data-i18n="startLoginButton"></button>
+            <button id="bootstrapFormCancel" class="transfer-button" data-i18n="collapseButton"></button>
+          </div>
+        </div>
+        <div id="bootstrapProgress" class="detail bootstrap-progress" hidden></div>
+        <div id="bootstrapChallenge" class="bootstrap-challenge" hidden>
+          <div id="bootstrapChallengeHint" class="detail bootstrap-challenge-hint"></div>
+          <img id="bootstrapCaptchaImg" class="bootstrap-captcha-img" data-i18n-alt="captchaImgAlt" hidden>
+          <div class="bootstrap-challenge-row">
+            <input id="bootstrapCodeInput" type="text" inputmode="numeric" maxlength="6" data-i18n-placeholder="codeInputPlaceholder" hidden>
+            <input id="bootstrapCaptchaInput" type="text" data-i18n-placeholder="captchaInputPlaceholder" hidden>
+            <button id="bootstrapChallengeSubmit" class="transfer-button" data-i18n="submitButton"></button>
+          </div>
+        </div>
       </div>
 
       <div class="setting-block compact">
-        <div class="setting-head"><span class="setting-label">本月用量</span><button id="usage" class="link-button">查询</button></div>
-        <div id="usageText" class="detail">由 Mozilla 服务端统计用量</div>
+        <div class="setting-head"><span class="setting-label" data-i18n="usageLabel"></span><button id="usage" class="link-button" data-i18n="queryButton"></button></div>
+        <div id="usageText" class="detail" data-i18n="usageDefault"></div>
       </div>
 
       <div class="setting-block compact local-block">
-        <div class="setting-head"><span class="setting-label">本地组件</span><span class="ondemand">按需运行</span></div>
-        <button id="openFolder" class="path-button"><span id="installPath">正在读取安装位置…</span><span>↗</span></button>
-        <div class="cleanup-actions"><button id="removeLocal">删除本地组件</button><button id="fullUninstall" class="danger">完整卸载</button></div>
+        <div class="setting-head"><span class="setting-label" data-i18n="localComponentLabel"></span><span class="ondemand" data-i18n="onDemand"></span></div>
+        <button id="openFolder" class="path-button"><span id="installPath" data-i18n="installPathLoading"></span><span>↗</span></button>
+        <div class="cleanup-actions"><button id="removeLocal" data-i18n="removeLocalButton"></button><button id="fullUninstall" class="danger" data-i18n="fullUninstallButton"></button></div>
       </div>
     </section>
   </main>

@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+
+- **In-app browser login: credentials without a desktop Firefox.** The popup now
+  collects the Mozilla account email and password in a small form and drives a
+  headless Playwright Firefox through `accounts.firefox.com`. The Fastly
+  human-check, the image captcha and the 6-digit email confirmation code are all
+  presented and answered inside the popup, so no console window and no local
+  Firefox installation are involved. Afterwards the stored session renews itself
+  over plain HTTP; Firefox never has to run again.
+- **Sign-in confirmation for new devices.** Mozilla marks every session created
+  from an unrecognised browser as unverified, and exchanging such a session for
+  an OAuth token fails with `errno 138`. The flow now probes
+  `GET /session/status` and, when confirmation is required, asks for the emailed
+  6-digit code and confirms the session with `POST /session/verify_code`
+  (`POST /session/verify/totp` for TOTP accounts). A code already typed on the
+  accounts page is reused instead of being requested twice.
+- **Command audit log** at `runtime/logs/bridge.log` and a login transcript at
+  `runtime/logs/bootstrap-login.log`. Both record command names, outcomes and
+  non-secret error text only; passwords and verification codes never reach them.
+  "Clicked the button and nothing happened" is now diagnosable.
+- Brave's Native Messaging registry key
+  (`HKCU\Software\BraveSoftware\Brave\NativeMessagingHosts`) is registered
+  alongside Chrome, Edge and Chromium.
+- The optional browser-login dependency (Playwright plus its Firefox build,
+  about 80 MB into `runtime/pw-browsers`) is installed by the setup script.
+  A failure there disables only the browser-login button.
+
+### Fixed
+
+- **Fastly answered a valid challenge POST with an empty HTTP 400**, which killed
+  the login silently and left the user staring at an inert page. The challenge
+  cycle now retries as a whole, and each retry discards the previous challenge
+  token, whose reuse guarantees another empty 400.
+- **The captcha image disappeared while waiting.** The heartbeat is refreshed
+  while the flow waits for input, and the refresh used to overwrite
+  `captcha_b64` with null, so a slow human check lost the image. The image is now
+  re-sent with every refresh.
+- **Login messages were invisible.** Notices render at the top of the popup, which
+  is scrolled out of view while the user works in the settings block; every
+  login-related message now also appears inline under the form. Validation errors
+  are reported as the user types, and the challenge area scrolls into view and
+  takes focus when it appears.
+- **The email confirmation code could not be typed at all.** The console input
+  path used raw keyboard polling, which bypasses the Windows IME and produced
+  mojibake for CJK input, and the password prompt used `getpass`, which does not
+  echo. Both were replaced by the in-popup form.
+- The stale-extension case now reports itself. A `bootstrap_login` request
+  without credentials is answered with an explicit "reload the extension"
+  message instead of a silent failure.
+- `INSTALL-OR-REPAIR.ps1` is written as UTF-8 with a BOM; without it Windows
+  PowerShell 5.1 read the file as ANSI and failed to parse the Chinese strings.
+
 ## 1.0.6
 
 ### Fixed

@@ -1,0 +1,1283 @@
+{
+  "extName": {
+    "message": "Firefox IP 保护桥接（非官方）",
+    "description": "扩展名称，显示在 Chrome 工具栏与扩展管理页。"
+  },
+  "extShortName": {
+    "message": "火狐 VPN",
+    "description": "空间有限时使用的扩展简称。"
+  },
+  "extDescription": {
+    "message": "通过本地桥接在 Chrome 中使用 Firefox IP 保护，并提供白名单/黑名单路由、按路由生效的 DNS 防护、WebRTC 防泄漏、区域隐私保护和可移动安装。",
+    "description": "扩展说明，显示在 Chrome 扩展管理页。"
+  },
+  "actionTitle": {
+    "message": "火狐 VPN",
+    "description": "工具栏按钮的悬停提示。"
+  },
+
+  "brandBeta": {
+    "message": "测试版",
+    "description": "弹窗标题栏中产品名旁的标记。"
+  },
+  "infoButtonTitle": {
+    "message": "帮助与状态",
+    "description": "信息按钮的悬停提示与无障碍标签。"
+  },
+  "headlineOff": {
+    "message": "VPN 已关闭",
+    "description": "VPN 未连接时显示的标题。"
+  },
+  "powerOn": {
+    "message": "开启 VPN",
+    "description": "VPN 关闭时主按钮的文案。"
+  },
+  "locationRec": {
+    "message": "推荐（自动）",
+    "description": "默认的出口位置选项。"
+  },
+  "locationLabel": {
+    "message": "位置：推荐",
+    "description": "尚不知晓国家名时位置行的文案。"
+  },
+  "countrySelectAria": {
+    "message": "VPN 位置",
+    "description": "出口位置下拉框的无障碍标签。"
+  },
+  "siteRowTitle": {
+    "message": "为此网站使用 VPN",
+    "description": "单站点 VPN 开关的标签。"
+  },
+  "siteNoPage": {
+    "message": "打开网页后可单独设置",
+    "description": "当前标签页无法单独路由时显示。"
+  },
+  "settingsRow": {
+    "message": "设置",
+    "description": "设置行的标签。"
+  },
+  "modeAllowlist": {
+    "message": "白名单",
+    "description": "白名单代理模式的名称。"
+  },
+  "modeBlacklist": {
+    "message": "黑名单",
+    "description": "黑名单代理模式的名称。"
+  },
+  "proxyModeLabel": {
+    "message": "代理模式",
+    "description": "代理模式设置块的标签。"
+  },
+  "modeDescAllowlist": {
+    "message": "只有白名单里的域名及其站点族走 VPN；其余网站直接连接。",
+    "description": "白名单模式的说明。"
+  },
+  "autoConnectLabel": {
+    "message": "启动时自动连接",
+    "description": "自动连接设置的标签。"
+  },
+  "autoConnectDetail": {
+    "message": "启动 Chrome 后先启动本地组件，确认代理就绪后再接管流量。",
+    "description": "自动连接设置的说明。"
+  },
+  "autoConnectHelp": {
+    "message": "连接失败时会保持直连，不会阻断浏览器网络。",
+    "description": "自动连接设置下方的帮助文字。"
+  },
+  "privacyProtectionLabel": {
+    "message": "隐私保护",
+    "description": "隐私设置块的标题。"
+  },
+  "webrtcTitle": {
+    "message": "WebRTC 防泄漏",
+    "description": "WebRTC 防泄漏行的标题。"
+  },
+  "webrtcDetailDefault": {
+    "message": "阻止 WebRTC 绕过代理暴露真实 IP；VPN 关闭时也可以继续保护。",
+    "description": "WebRTC 防泄漏的默认说明。"
+  },
+  "dnsTitle": {
+    "message": "DNS 预解析防护",
+    "description": "DNS 预解析防护行的标题。"
+  },
+  "dnsDetailDefault": {
+    "message": "只对实际走 VPN 的页面关闭 DNS 预解析；直连页面保留 Chrome 原本的预解析与预连接加速。",
+    "description": "DNS 预解析防护的默认说明。"
+  },
+  "regionTitle": {
+    "message": "区域隐私保护",
+    "description": "区域隐私保护行的标题。"
+  },
+  "regionDetailDefault": {
+    "message": "仅对实际走 VPN 的网站对齐语言、时区与出口地区；明确豁免的网站保持浏览器原生环境。",
+    "description": "区域隐私保护的默认说明。"
+  },
+  "regionProfilePending": {
+    "message": "当前配置将在 VPN 连接后自动生成。",
+    "description": "区域配置行的占位文案。"
+  },
+  "regionPageDiagPending": {
+    "message": "当前网页实测：等待检测。",
+    "description": "网页实测行的占位文案。"
+  },
+  "regionHelp": {
+    "message": "开启后只对实际走 VPN 的普通网页生效：调整 Accept-Language、navigator.language(s)、Intl 默认区域/时区与时区偏移，阻止精确定位，并遮罩常见中文字体的 Canvas/FontFaceSet 可用性探测。直连网站保持浏览器原生语言/时区环境。",
+    "description": "说明区域隐私保护具体作用的帮助文字。"
+  },
+  "webrtcHelp": {
+    "message": "WebRTC 防护可能让部分语音/视频通话退化为 TCP 或无法建立直连。实际网页域名通过 SOCKS5 时仍由代理端解析。",
+    "description": "提示 WebRTC 防护副作用的帮助文字。"
+  },
+  "addButton": {
+    "message": "添加",
+    "description": "把域名加入受管列表的按钮。"
+  },
+  "domainInputPlaceholder": {
+    "message": "example.com",
+    "description": "域名输入框的占位文字。"
+  },
+  "domainListEmpty": {
+    "message": "还没有网站",
+    "description": "受管域名列表为空时显示。"
+  },
+  "domainListHelp": {
+    "message": "规则包含该域名及其子域名；ChatGPT、Claude、Bilibili 等已知站点族会自动扩展核心域名。未识别的第三方 CDN 仍需单独添加。",
+    "description": "说明域名规则与站点族如何生效的帮助文字。"
+  },
+  "importButton": {
+    "message": "导入",
+    "description": "展开规则导入面板的按钮。"
+  },
+  "exportButton": {
+    "message": "导出",
+    "description": "导出当前规则列表的按钮。"
+  },
+  "ruleImportPlaceholder": {
+    "message": "粘贴域名列表，每行一个；也支持 JSON 数组格式。",
+    "description": "规则导入文本框的占位文字。"
+  },
+  "copyButton": {
+    "message": "复制",
+    "description": "复制文本框内容的按钮。"
+  },
+  "copyBoxTitle": {
+    "message": "复制文本框内容",
+    "description": "复制按钮的悬停提示。"
+  },
+  "confirmImportTitle": {
+    "message": "把文本框内容合并进当前列表",
+    "description": "确认导入按钮的悬停提示。"
+  },
+  "clearButton": {
+    "message": "清空",
+    "description": "清空文本框的按钮。"
+  },
+  "clearBoxTitle": {
+    "message": "清空文本框",
+    "description": "清空按钮的悬停提示。"
+  },
+  "mozillaAccountLabel": {
+    "message": "Mozilla 账户",
+    "description": "Mozilla 账户设置块的标题。"
+  },
+  "checking": {
+    "message": "正在检查…",
+    "description": "正在读取账户状态时的占位文字。"
+  },
+  "browserLoginButton": {
+    "message": "浏览器登录",
+    "description": "启动浏览器登录流程的按钮。"
+  },
+  "importFirefoxButton": {
+    "message": "从 Firefox 导入",
+    "description": "导入 Firefox 登录状态的按钮。"
+  },
+  "emailPlaceholder": {
+    "message": "Mozilla 账号邮箱",
+    "description": "账户邮箱输入框的占位文字。"
+  },
+  "passwordPlaceholder": {
+    "message": "账号密码（不会保存）",
+    "description": "账户密码输入框的占位文字。"
+  },
+  "startLoginButton": {
+    "message": "开始登录",
+    "description": "提交账号密码的按钮。"
+  },
+  "collapseButton": {
+    "message": "收起",
+    "description": "收起凭据表单的按钮。"
+  },
+  "captchaImgAlt": {
+    "message": "图片验证码",
+    "description": "验证码图片的替代文字。"
+  },
+  "codeInputPlaceholder": {
+    "message": "6 位验证码",
+    "description": "邮件验证码输入框的占位文字。"
+  },
+  "captchaInputPlaceholder": {
+    "message": "图片中的字符",
+    "description": "图片验证码答案输入框的占位文字。"
+  },
+  "submitButton": {
+    "message": "提交",
+    "description": "提交验证码或图片验证码答案的按钮。"
+  },
+  "usageLabel": {
+    "message": "本月用量",
+    "description": "用量设置块的标题。"
+  },
+  "queryButton": {
+    "message": "查询",
+    "description": "查询本月用量的按钮。"
+  },
+  "usageDefault": {
+    "message": "由 Mozilla 服务端统计用量",
+    "description": "用量行的默认文字。"
+  },
+  "localComponentLabel": {
+    "message": "本地组件",
+    "description": "本地组件设置块的标题。"
+  },
+  "onDemand": {
+    "message": "按需运行",
+    "description": "说明本地组件仅在需要时运行。"
+  },
+  "installPathLoading": {
+    "message": "正在读取安装位置…",
+    "description": "正在读取安装路径时的占位文字。"
+  },
+  "removeLocalButton": {
+    "message": "删除本地组件",
+    "description": "删除本地组件的按钮。"
+  },
+  "fullUninstallButton": {
+    "message": "完整卸载",
+    "description": "完整卸载全部内容的按钮。"
+  },
+
+  "countryUnavailable": {
+    "message": "$1（不可用）",
+    "description": "当前没有节点的出口位置选项文案。$1 为国家名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "德国"
+      }
+    }
+  },
+
+  "errBackgroundNoResponse": {
+    "message": "后台服务未响应，请重新加载扩展后再试。",
+    "description": "无法连接后台服务时显示的错误。"
+  },
+  "errBackgroundNoResult": {
+    "message": "后台服务没有返回结果。",
+    "description": "后台服务返回空响应时显示的错误。"
+  },
+  "errOperationFailed": {
+    "message": "操作失败",
+    "description": "通用兜底错误。"
+  },
+  "errNativeHostNotFound": {
+    "message": "未找到本地桥接程序。请运行 INSTALL-OR-REPAIR.cmd 修复本地桥接；修复后扩展目录可以移动或改名。",
+    "description": "Chrome 原生消息宿主未找到错误的译文。"
+  },
+  "errNativeHostCommunicate": {
+    "message": "与本地桥接程序通信失败。请确认已安装 runtime\\vpn_bridge_host.exe，并运行 INSTALL-OR-REPAIR.cmd 修复后重启浏览器。",
+    "description": "Chrome 原生消息通信错误的译文。"
+  },
+  "errNativeHostExited": {
+    "message": "本地桥接程序已退出。请重试，或运行 INSTALL-OR-REPAIR.cmd 修复本地桥接。",
+    "description": "Chrome 原生宿主已退出错误的译文。"
+  },
+  "errNativeHostForbidden": {
+    "message": "Chrome 无权访问本地桥接程序。请确认扩展 ID 与安装脚本一致。",
+    "description": "Chrome 禁止访问原生消息宿主错误的译文。"
+  },
+  "errNativeHostForbiddenRegistered": {
+    "message": "Chrome 无权访问本地桥接程序。请确认扩展已由当前安装脚本注册。",
+    "description": "后台服务使用的禁止访问原生消息宿主错误变体。"
+  },
+  "errNativeNoResponse": {
+    "message": "本地桥接程序没有返回结果。",
+    "description": "本地桥接程序没有返回内容时显示的错误。"
+  },
+  "errNativeTimeout": {
+    "message": "本地桥接程序执行 $1 时超时。",
+    "description": "原生命令超时时显示的错误。$1 为命令名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "start"
+      }
+    }
+  },
+  "errNativeDisconnected": {
+    "message": "本地桥接程序已断开连接。",
+    "description": "原生消息端口关闭时显示的错误。"
+  },
+  "errProxyControlled": {
+    "message": "Chrome 代理正被其他扩展或管理员策略控制。",
+    "description": "后台服务无法修改代理设置时显示的错误。"
+  },
+  "errProxyControlledPopup": {
+    "message": "Chrome 代理当前被其他扩展或管理员策略控制。",
+    "description": "弹窗无法修改代理设置时显示的错误。"
+  },
+  "errUnknownCommand": {
+    "message": "扩展收到了未知命令。",
+    "description": "收到无法识别的弹窗命令时显示的错误。"
+  },
+  "errUnknownExtensionCommand": {
+    "message": "未知的扩展命令：$1",
+    "description": "指出无法识别的命令名。$1 为命令名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "\"sync\""
+      }
+    }
+  },
+  "errNoNodes": {
+    "message": "所选地区当前没有可用节点，请换一个地区。",
+    "description": "所选地区没有可用出口节点时显示的错误。"
+  },
+  "errOutdatedBackend": {
+    "message": "检测到旧版后台仍在运行。请运行 1.0.0 的 INSTALL-OR-REPAIR.cmd，然后在扩展管理页重新加载本扩展。",
+    "description": "已安装的本地组件版本过旧时显示的错误。"
+  },
+  "errMissingRenewalCredentials": {
+    "message": "未找到可续期的 Firefox 登录状态。请先点击“从 Firefox 导入登录状态”，然后再查询流量。",
+    "description": "没有可续期凭据却查询用量时显示的错误。"
+  },
+  "errAccountReauth": {
+    "message": "Firefox 账户登录状态已失效，请在 Firefox 中重新登录后再次导入。",
+    "description": "导入的 Firefox 账户会话已过期时显示的错误。"
+  },
+  "errUsageRateLimited": {
+    "message": "Mozilla 暂时限制了账户查询频率，请稍后再试。",
+    "description": "用量接口限流时显示的错误。"
+  },
+  "errUsageTemporary": {
+    "message": "Mozilla 流量查询暂时失败，请稍后重试。",
+    "description": "用量查询临时失败时显示的错误。"
+  },
+  "errUsage403": {
+    "message": "当前 Mozilla 账户没有可用的 Firefox IP 保护资格。",
+    "description": "账户没有 Firefox IP 保护资格时显示的错误。"
+  },
+  "errUsage401": {
+    "message": "Firefox 账户授权已失效，请重新导入登录状态。",
+    "description": "用量查询未获授权时显示的错误。"
+  },
+  "errHttp451": {
+    "message": "Mozilla 拒绝了当前网络出口的请求（HTTP 451，与账户无关）。通常是出口地区暂时受限：请稍后重试；隧道建立后凭据续期会自动改走隧道出口。如反复出现，可将可用的 HTTP 代理写入 runtime 的 tokens/refresh_proxy.txt。",
+    "description": "Mozilla 返回 HTTP 451 时显示的错误。"
+  },
+  "errRenewalPaused": {
+    "message": "当前网络出口暂时被 Mozilla 拒绝（HTTP 451），请稍后重试；这不是账户问题。",
+    "description": "服务受限导致自动续期暂停时显示的错误。"
+  },
+  "errGenericUnknown": {
+    "message": "未知",
+    "description": "数值未知时的兜底文案。"
+  },
+  "errUnreadableUsage": {
+    "message": "未返回可读的用量信息。",
+    "description": "用量数据无法解析时显示的错误。"
+  },
+  "errHelperError": {
+    "message": "本地桥接程序出错。",
+    "description": "后台服务使用的通用本地桥接错误。"
+  },
+  "errNoDomainEntered": {
+    "message": "请输入网站域名。",
+    "description": "域名为空时的校验错误。"
+  },
+  "errDomainInvalid": {
+    "message": "这个网站地址看起来无效。",
+    "description": "域名格式不正确时的校验错误。"
+  },
+  "errProxyUnreadable": {
+    "message": "无法读取 Chrome 代理状态。",
+    "description": "无法读取代理设置时显示的错误。"
+  },
+  "errProxyUnreadableRestore": {
+    "message": "无法确认 Chrome 代理是否已恢复直连。",
+    "description": "无法确认已失败放行时显示的错误。"
+  },
+  "errProxyControlOther": {
+    "message": "Chrome 代理正被另一个扩展或管理员策略控制。",
+    "description": "代理设置被其他扩展接管时显示的错误。"
+  },
+  "errProxyNotApplied": {
+    "message": "Chrome 代理设置未及时生效，请重试。",
+    "description": "设置后未观察到 PAC 脚本生效时显示的错误。"
+  },
+  "errStorageSaveFailed": {
+    "message": "无法保存 VPN 状态。",
+    "description": "持久化状态失败时显示的错误。"
+  },
+  "errSocksUnhealthy": {
+    "message": "本地 SOCKS5 代理启动后未通过上游连接检查。",
+    "description": "本地 SOCKS5 监听启动后不健康时显示的错误。"
+  },
+  "errSocksUnhealthyCountry": {
+    "message": "切换位置后本地 SOCKS5 代理未通过上游连接检查。",
+    "description": "切换位置后本地 SOCKS5 监听不健康时显示的错误。"
+  },
+  "errProxyReleasing": {
+    "message": "本地代理进程仍在释放，请稍后重试关闭或重新加载扩展。",
+    "description": "本地代理端口仍在释放时显示的错误。"
+  },
+  "errRestoreDirectShort": {
+    "message": "无法确认 Chrome 已恢复直连。",
+    "description": "后台服务无法确认失败放行时显示的简短错误。"
+  },
+  "errRestoreDirect": {
+    "message": "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。",
+    "description": "无法确认 Chrome 已恢复直连时显示的错误。"
+  },
+  "errImportNotJson": {
+    "message": "导入内容不是有效的 JSON 数组。",
+    "description": "粘贴的 JSON 无法解析时显示的错误。"
+  },
+  "errImportNotArray": {
+    "message": "导入内容必须是数组。",
+    "description": "粘贴的 JSON 不是数组时显示的错误。"
+  },
+  "errImportNoDomains": {
+    "message": "没有找到可导入的域名。",
+    "description": "粘贴的规则列表中没有域名时显示的错误。"
+  },
+  "errImportNoDomainsShort": {
+    "message": "没有可导入的域名。",
+    "description": "无域名可导入错误的简短变体。"
+  },
+  "errRestoreDirectNoCleanup": {
+    "message": "无法确认 Chrome 已恢复直连，未执行本地清理。",
+    "description": "因无法确认失败放行而中止清理时显示的错误。"
+  },
+  "errSocksStoppedRecovered": {
+    "message": "本地 SOCKS5 代理已停止，已恢复浏览器直连。",
+    "description": "说明代理已停止并完成恢复的状态。"
+  },
+  "errProxyAbnormalRecovered": {
+    "message": "Chrome 代理状态异常，已恢复浏览器直连。",
+    "description": "说明代理状态异常并完成恢复的状态。"
+  },
+  "errSocksStoppedRecovering": {
+    "message": "本地 SOCKS5 代理已停止，正在自动恢复。",
+    "description": "守护进程重启已停止代理时的状态。"
+  },
+  "errSocksUnhealthyRecovering": {
+    "message": "本地 SOCKS5 代理健康检查失败，正在自动恢复。",
+    "description": "守护进程重启不健康代理时的状态。"
+  },
+  "errEmailPasswordRequired": {
+    "message": "请填写邮箱和密码",
+    "description": "登录表单提交不完整时显示的错误。"
+  },
+  "errUnknownPrivacyOption": {
+    "message": "未知的隐私设置。",
+    "description": "无法识别的隐私选项错误。"
+  },
+  "errUnknownRegionOption": {
+    "message": "未知的区域隐私保护设置。",
+    "description": "无法识别的区域隐私选项错误。"
+  },
+  "errPrivacyUnsupported": {
+    "message": "$1：当前 Chrome 不支持此隐私设置。",
+    "description": "隐私设置不可用时显示的错误。$1 为设置名称。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "WebRTC 防泄漏"
+      }
+    }
+  },
+  "errPrivacyControlled": {
+    "message": "$1无法修改：该设置正被其他扩展或管理员策略控制。",
+    "description": "隐私设置被其他方控制时显示的错误。$1 为设置名称。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "WebRTC 防泄漏"
+      }
+    }
+  },
+  "labelWebrtcLeakProtection": {
+    "message": "WebRTC 防泄漏",
+    "description": "错误信息中作为隐私设置名称使用的标签。"
+  },
+  "regionErrorLanguageHeader": {
+    "message": "语言请求头：$1",
+    "description": "Accept-Language 请求头规则产生的区域防护错误前缀。$1 为错误信息。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "规则更新失败"
+      }
+    }
+  },
+  "regionErrorGeolocation": {
+    "message": "地理定位：$1",
+    "description": "地理定位设置产生的区域防护错误前缀。$1 为错误信息。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "设置更新失败"
+      }
+    }
+  },
+  "errUninstallFailed": {
+    "message": "卸载失败：$1",
+    "description": "完整卸载流程失败时显示的错误。$1 为错误信息。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "本地桥接不可用"
+      }
+    }
+  },
+  "errUnknownError": {
+    "message": "未知错误",
+    "description": "兜底错误文案。"
+  },
+  "errAutoConnectFailed": {
+    "message": "启动时自动连接失败：$1",
+    "description": "记录启动自动连接失败原因的错误。$1 为错误信息。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "没有可用节点"
+      }
+    }
+  },
+  "actionTitleConnectingAuto": {
+    "message": "正在自动连接 VPN…",
+    "description": "启动自动连接运行时工具栏按钮的悬停提示。"
+  },
+  "actionTitleOn": {
+    "message": "VPN 已开启 · $1",
+    "description": "VPN 已连接时工具栏按钮的悬停提示。$1 为代理模式。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "白名单"
+      }
+    }
+  },
+  "actionTitleOff": {
+    "message": "VPN 已关闭",
+    "description": "VPN 未连接时工具栏按钮的悬停提示。"
+  },
+
+  "statusReading": {
+    "message": "正在读取状态…",
+    "description": "正在读取状态时显示的标题。"
+  },
+  "statusConnecting": {
+    "message": "正在连接…",
+    "description": "正在建立隧道时显示的标题。"
+  },
+  "statusSwitching": {
+    "message": "正在切换位置…",
+    "description": "正在更换出口位置时显示的标题。"
+  },
+  "statusDisconnecting": {
+    "message": "正在关闭…",
+    "description": "正在断开隧道时显示的标题。"
+  },
+  "headlineOn": {
+    "message": "VPN 已开启",
+    "description": "VPN 已连接时显示的标题。"
+  },
+  "powerReading": {
+    "message": "正在读取…",
+    "description": "正在读取状态时主按钮的文案。"
+  },
+  "powerConnecting": {
+    "message": "正在连接…",
+    "description": "正在建立隧道时主按钮的文案。"
+  },
+  "powerSwitching": {
+    "message": "正在切换…",
+    "description": "正在更换出口位置时主按钮的文案。"
+  },
+  "powerDisconnecting": {
+    "message": "正在关闭…",
+    "description": "正在断开隧道时主按钮的文案。"
+  },
+  "powerOff": {
+    "message": "关闭 VPN",
+    "description": "VPN 已连接时主按钮的文案。"
+  },
+  "locationPrefix": {
+    "message": "位置：$1",
+    "description": "位置行的文案。$1 为国家名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "德国"
+      }
+    }
+  },
+  "modeHintChecking": {
+    "message": "正在检查本地代理…",
+    "description": "正在检查本地代理时显示的提示。"
+  },
+  "modeHintRestoring": {
+    "message": "正在恢复浏览器直连…",
+    "description": "正在断开隧道时显示的提示。"
+  },
+  "modeHintVerifying": {
+    "message": "正在验证本地代理…",
+    "description": "正在验证本地代理时显示的提示。"
+  },
+  "modeHintAllowlistCount": {
+    "message": "白名单 · $1 个网站",
+    "description": "白名单模式下的模式提示。$1 为网站数量。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "modeHintBlocklistCount": {
+    "message": "黑名单 · $1 个直连网站",
+    "description": "黑名单模式下含直连网站时的模式提示。$1 为网站数量。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "modeHintBlocklistAll": {
+    "message": "黑名单 · 默认全走 VPN",
+    "description": "黑名单模式下列表为空时的模式提示。"
+  },
+
+  "credRefreshHint": {
+    "message": "打开一次 Firefox 或重新导入即可刷新。",
+    "description": "说明如何刷新过期凭据的后缀。"
+  },
+  "credRenewalFailures": {
+    "message": "最近续期失败 $1 次；$2",
+    "description": "续期失败后的凭据新鲜度警告。$1 为失败次数，$2 为刷新提示。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "2"
+      },
+      "2": {
+        "content": "$2",
+        "example": "可点“浏览器登录”重新登录以刷新；日常续期自动完成。"
+      }
+    }
+  },
+  "credStaleDays": {
+    "message": "凭据已 $1 天未刷新；$2",
+    "description": "凭据过旧时的凭据新鲜度警告。$1 为天数，$2 为刷新提示。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "20"
+      },
+      "2": {
+        "content": "$2",
+        "example": "可点“浏览器登录”重新登录以刷新；日常续期自动完成。"
+      }
+    }
+  },
+  "credStaleDaysShort": {
+    "message": "凭据已 $1 天未刷新。",
+    "description": "不带刷新提示的凭据新鲜度警告。$1 为天数。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "credVerifiedHours": {
+    "message": "凭据 $1 小时前已验证。",
+    "description": "凭据新鲜度确认。$1 为小时数。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+
+  "webrtcActive": {
+    "message": "已阻止 WebRTC 使用非代理 UDP；VPN 关闭时也继续生效。",
+    "description": "WebRTC 防护生效时的说明。"
+  },
+  "webrtcBlocked": {
+    "message": "当前未能接管此设置：它被其他扩展或管理员策略控制。",
+    "description": "WebRTC 设置被其他方控制时的说明。"
+  },
+  "webrtcOff": {
+    "message": "已关闭；Chrome 使用原本的 WebRTC IP 策略。",
+    "description": "WebRTC 防护关闭时的说明。"
+  },
+  "dnsOff": {
+    "message": "已关闭；所有网站使用 Chrome 原本的 DNS 预解析。",
+    "description": "DNS 防护关闭时的说明。"
+  },
+  "dnsStandby": {
+    "message": "待命；VPN 开启后只保护实际走 VPN 的页面，直连网站不受影响。",
+    "description": "VPN 关闭时 DNS 防护的说明。"
+  },
+  "dnsRouteScoped": {
+    "message": "已按路由生效：VPN 页面关闭 DNS 预解析，直连页面保留原生预解析/预连接。",
+    "description": "按路由防护生效时 DNS 防护的说明。"
+  },
+  "dnsEmptyAllowlist": {
+    "message": "白名单为空；当前没有网页走 VPN，因此 DNS 防护无需生效。",
+    "description": "白名单模式下列表为空时 DNS 防护的说明。"
+  },
+  "dnsUnsupported": {
+    "message": "当前 Chrome 不支持按路由修改 DNS 预解析控制。",
+    "description": "无法按路由控制时 DNS 防护的说明。"
+  },
+  "dnsSyncing": {
+    "message": "正在同步按路由 DNS 防护规则。",
+    "description": "正在应用规则时 DNS 防护的说明。"
+  },
+  "regionOff": {
+    "message": "已关闭；网站会看到 Chrome 原本的语言、时区、字体与定位线索。",
+    "description": "区域隐私保护关闭时的说明。"
+  },
+  "regionStandby": {
+    "message": "待命；VPN 连接后只对实际走 VPN 的网页生效。",
+    "description": "VPN 关闭时区域隐私保护的说明。"
+  },
+  "regionActive": {
+    "message": "正在对实际走 VPN 的网页减少语言、时区、定位与中文字体线索。",
+    "description": "区域隐私保护生效时的说明。"
+  },
+  "regionWaiting": {
+    "message": "已开启；正在等待 VPN 连接。",
+    "description": "等待 VPN 连接时区域隐私保护的说明。"
+  },
+  "regionProfileCurrent": {
+    "message": "当前配置：$1 · $2 · $3。已打开网页会自动同步。",
+    "description": "当前区域配置摘要。$1 为国家，$2 为区域设置，$3 为时区。",
+    "placeholders": {
+      "1": { "content": "$1", "example": "德国" },
+      "2": { "content": "$2", "example": "de-DE" },
+      "3": { "content": "$3", "example": "Europe/Berlin" }
+    }
+  },
+  "modeDescBlocklist": {
+    "message": "除黑名单中的直连网站外，其余网站默认走 VPN。",
+    "description": "黑名单模式的说明。"
+  },
+  "listTitleAllowlist": {
+    "message": "使用 VPN 的白名单",
+    "description": "白名单模式下受管列表的标题。"
+  },
+  "listTitleBlocklist": {
+    "message": "直接连接的黑名单",
+    "description": "黑名单模式下受管列表的标题。"
+  },
+  "listEmptyAllowlist": {
+    "message": "白名单为空，当前不会有网站走 VPN。",
+    "description": "白名单模式下的空状态文案。"
+  },
+  "listEmptyBlocklist": {
+    "message": "黑名单为空，当前所有网站都会走 VPN。",
+    "description": "黑名单模式下的空状态文案。"
+  },
+  "removeDomainTitle": {
+    "message": "删除 $1",
+    "description": "单个域名删除按钮的悬停提示。$1 为域名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+
+  "diagRegionOff": {
+    "message": "当前网页实测：区域隐私保护已关闭。",
+    "description": "区域隐私保护关闭时的实测行。"
+  },
+  "diagVpnOff": {
+    "message": "当前网页实测：VPN 未连接，区域保护待命。",
+    "description": "VPN 关闭时的实测行。"
+  },
+  "diagUnsupportedPage": {
+    "message": "当前网页实测：此页面不支持检测。",
+    "description": "无法检测的页面显示的实测行。"
+  },
+  "diagNoResult": {
+    "message": "没有返回结果",
+    "description": "页面内探测没有返回结果时显示的错误。"
+  },
+  "diagFontUnknown": {
+    "message": "字体未知",
+    "description": "无法完成字体探测时的实测片段。"
+  },
+  "diagFontLeak": {
+    "message": "中文字体仍可探测",
+    "description": "中文字体仍可探测时的实测片段。"
+  },
+  "diagFontMasked": {
+    "message": "中文字体已遮罩",
+    "description": "中文字体已遮罩时的实测片段。"
+  },
+  "diagLine": {
+    "message": "当前网页实测：$1 · $2 · $3$4",
+    "description": "网页实测摘要。$1 为语言，$2 为时区，$3 为字体结论，$4 为结尾状态标记。",
+    "placeholders": {
+      "1": { "content": "$1", "example": "de-DE" },
+      "2": { "content": "$2", "example": "Europe/Berlin" },
+      "3": { "content": "$3", "example": "中文字体已遮罩" },
+      "4": { "content": "$4", "example": " ✓" }
+    }
+  },
+  "diagOkSuffix": {
+    "message": " ✓",
+    "description": "实测结果全部匹配时追加的后缀。"
+  },
+  "diagPartialSuffix": {
+    "message": "（未完全生效，请刷新网页）",
+    "description": "防护未完全生效时追加的后缀。"
+  },
+  "diagNotInjected": {
+    "message": "当前网页实测：尚未载入保护脚本，请刷新此网页。",
+    "description": "内容脚本尚未运行时的实测行。"
+  },
+  "diagFontProbeText": {
+    "message": "中文字体检测ABCabc012",
+    "description": "页面内字体探测所测量的文本；请保持其不含不得泄漏的字符。"
+  },
+
+  "noticeReadingStatus": {
+    "message": "正在读取 VPN 状态…",
+    "description": "正在读取状态时显示的提示。"
+  },
+  "errLocationListTimeout": {
+    "message": "可用地区列表加载超时。",
+    "description": "出口位置列表加载过久时显示的错误。"
+  },
+  "warnLocationListStale": {
+    "message": "可用地区列表暂时无法刷新：$1",
+    "description": "出口位置列表回退到缓存时显示的警告。$1 为底层错误。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "可用地区列表加载超时。"
+      }
+    }
+  },
+  "siteNotConfigurable": {
+    "message": "当前页面无法单独设置（仅支持 http/https 网页）",
+    "description": "当前标签页无法单独配置时在站点行显示。"
+  },
+  "installPathUnknown": {
+    "message": "未返回安装位置",
+    "description": "安装路径的兜底文案。"
+  },
+  "credStatusImported": {
+    "message": "已导入，可自动续期访问凭据",
+    "description": "存在可续期凭据时的账户状态。"
+  },
+  "credStatusNotSignedIn": {
+    "message": "尚未导入 Firefox 登录状态",
+    "description": "没有可用凭据时的账户状态。"
+  },
+  "credStatusBridgeUnavailable": {
+    "message": "本地桥接程序不可用",
+    "description": "无法连接本地桥接时的账户状态。"
+  },
+  "noticeAutoConnectRetrying": {
+    "message": "自动连接尚未完成，正在后台自动重试；也可以点上方按钮立即连接。",
+    "description": "启动自动连接仍在重试时显示的提示。"
+  },
+  "noticeWaitingBrowserLogin": {
+    "message": "正在等待浏览器登录…",
+    "description": "浏览器登录流程运行时的进度文字。"
+  },
+  "credStatusBridgeMissing": {
+    "message": "未找到本地桥接程序，请重新运行安装或更新脚本。",
+    "description": "本地桥接缺失时的账户状态。"
+  },
+  "noticeConnectingService": {
+    "message": "正在连接 Firefox IP 保护服务…",
+    "description": "正在建立隧道时显示的提示。"
+  },
+  "noticeDisconnecting": {
+    "message": "正在断开连接…",
+    "description": "正在断开隧道时显示的提示。"
+  },
+  "errSocksNotKeptAlive": {
+    "message": "本地 SOCKS5 代理未能保持运行，已恢复浏览器直连。",
+    "description": "连接后本地代理立即退出时显示的错误。"
+  },
+  "errDirectNotConfirmedReload": {
+    "message": "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。",
+    "description": "命令执行后无法确认失败放行时显示的错误。"
+  },
+  "noticeConnectedRecommended": {
+    "message": "VPN 已连接，推荐位置当前使用 $1。",
+    "description": "使用推荐位置连接成功后显示的提示。$1 为解析出的国家名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "德国"
+      }
+    }
+  },
+  "noticeConnected": {
+    "message": "VPN 已连接。",
+    "description": "VPN 连接成功后显示的提示。"
+  },
+  "noticeDisconnected": {
+    "message": "VPN 已关闭。",
+    "description": "VPN 断开后显示的提示。"
+  },
+  "errCountrySwitchUnverified": {
+    "message": "位置切换后 VPN 状态未能通过检查。",
+    "description": "无法验证位置切换结果时显示的错误。"
+  },
+  "noticeCountrySwitched": {
+    "message": "位置已切换。",
+    "description": "连接状态下切换出口位置后显示的提示。"
+  },
+  "noticeCountrySaved": {
+    "message": "位置已保存。",
+    "description": "未连接状态下保存出口位置后显示的提示。"
+  },
+  "noticeSiteUsesVpn": {
+    "message": "$1 已改为走 VPN。已打开的页面请刷新后生效。",
+    "description": "把站点改为走 VPN 后显示的提示。$1 为域名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "noticeSiteDirect": {
+    "message": "$1 已改为直连。已打开的页面请刷新后生效。",
+    "description": "把站点改为直连后显示的提示。$1 为域名。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "noticeModeAllowlist": {
+    "message": "已切换为白名单模式。",
+    "description": "切换到白名单模式后显示的提示。"
+  },
+  "noticeModeBlocklist": {
+    "message": "已切换为黑名单模式。",
+    "description": "切换到黑名单模式后显示的提示。"
+  },
+  "noticeAutoConnectOn": {
+    "message": "已启用启动时自动连接；下次启动 Chrome 会先启动本地组件，连接就绪后再启用 VPN。",
+    "description": "启用自动连接后显示的提示。"
+  },
+  "noticeAutoConnectOff": {
+    "message": "已关闭启动时自动连接。",
+    "description": "关闭自动连接后显示的提示。"
+  },
+  "noticeWebrtcOn": {
+    "message": "WebRTC 防泄漏已开启；即使 VPN 关闭也会继续保护。",
+    "description": "开启 WebRTC 防泄漏后显示的提示。"
+  },
+  "noticeWebrtcOff": {
+    "message": "WebRTC 防泄漏已关闭，已恢复 Chrome 原本的 WebRTC 策略。",
+    "description": "关闭 WebRTC 防泄漏后显示的提示。"
+  },
+  "noticeDnsOnActive": {
+    "message": "DNS 预解析防护已按 VPN 路由生效；直连网站不受影响。",
+    "description": "连接状态下开启 DNS 防护后显示的提示。"
+  },
+  "noticeDnsOnStandby": {
+    "message": "DNS 预解析防护已开启，将在 VPN 连接时按路由生效。",
+    "description": "未连接状态下开启 DNS 防护后显示的提示。"
+  },
+  "noticeDnsOff": {
+    "message": "DNS 预解析防护已关闭；Chrome 保持原本的 DNS 预解析行为。",
+    "description": "关闭 DNS 防护后显示的提示。"
+  },
+  "noticeRegionOn": {
+    "message": "区域隐私保护已开启；VPN 连接后只对实际走 VPN 的网页生效。",
+    "description": "开启区域隐私保护后显示的提示。"
+  },
+  "noticeRegionOff": {
+    "message": "区域隐私保护已关闭。",
+    "description": "关闭区域隐私保护后显示的提示。"
+  },
+  "noticeRuleAdded": {
+    "message": "网站规则已添加。",
+    "description": "添加域名规则后显示的提示。"
+  },
+  "noticeCopiedToBox": {
+    "message": "已生成内容，请手动复制文本框中的文字。",
+    "description": "剪贴板不可用时显示的提示。"
+  },
+  "noticeExportEmptyAllowlist": {
+    "message": "白名单为空，没有可导出的内容。",
+    "description": "导出空白名单时显示的提示。"
+  },
+  "noticeExportEmptyBlocklist": {
+    "message": "黑名单为空，没有可导出的内容。",
+    "description": "导出空黑名单时显示的提示。"
+  },
+  "exportKindAllowlist": {
+    "message": "白名单（走 VPN）",
+    "description": "导出文本中白名单的标注。"
+  },
+  "exportKindBlocklist": {
+    "message": "黑名单（直连）",
+    "description": "导出文本中黑名单的标注。"
+  },
+  "exportHeaderTitle": {
+    "message": "# 火狐 VPN $1",
+    "description": "导出规则列表的第一行。$1 为列表种类。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "白名单（走 VPN）"
+      }
+    }
+  },
+  "exportHeaderCount": {
+    "message": "# 共 $1 条",
+    "description": "导出规则列表的第二行。$1 为条目数量。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "noticeCopiedRules": {
+    "message": "已复制 $1 条规则。",
+    "description": "复制导出规则后显示的提示。$1 为规则数量。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "errBoxEmpty": {
+    "message": "文本框是空的，没有可复制的内容。",
+    "description": "复制空文本框时显示的错误。"
+  },
+  "noticeBoxCopied": {
+    "message": "已复制文本框内容。",
+    "description": "复制文本框内容后显示的提示。"
+  },
+  "errClipboardUnavailable": {
+    "message": "无法访问剪贴板，请手动选中并复制。",
+    "description": "剪贴板 API 不可用时显示的错误。"
+  },
+  "errPasteRulesFirst": {
+    "message": "请先在文本框粘贴要导入的域名列表。",
+    "description": "文本框为空却执行导入时显示的错误。"
+  },
+  "importKindAllowlist": {
+    "message": "白名单",
+    "description": "导入提示中白名单的标注。"
+  },
+  "importKindBlocklist": {
+    "message": "黑名单",
+    "description": "导入提示中黑名单的标注。"
+  },
+  "noticeImportMerged": {
+    "message": "已合并 $1 条新规则，$2现有 $3 条。",
+    "description": "导入成功后显示的提示。$1 为新增规则数，$2 为列表种类，$3 为新的总数。",
+    "placeholders": {
+      "1": { "content": "$1", "example": "4" },
+      "2": { "content": "$2", "example": "白名单" },
+      "3": { "content": "$3", "example": "16" }
+    }
+  },
+  "noticeImportNothingNew": {
+    "message": "没有新规则，$1仍是 $2 条。",
+    "description": "导入未新增任何规则时显示的提示。$1 为列表种类，$2 为总数。",
+    "placeholders": {
+      "1": { "content": "$1", "example": "白名单" },
+      "2": { "content": "$2", "example": "12" }
+    }
+  },
+  "noticeRuleRemoved": {
+    "message": "网站规则已删除。",
+    "description": "删除域名规则后显示的提示。"
+  },
+  "noticeImportingFirefox": {
+    "message": "正在从本机 Firefox 导入登录状态…",
+    "description": "从 Firefox 导入时的进度文字。"
+  },
+  "credStatusImportedVerified": {
+    "message": "已成功导入并验证",
+    "description": "导入成功后账户标签的兜底文案。"
+  },
+  "noticeFirefoxImported": {
+    "message": "Firefox 登录状态已成功导入。",
+    "description": "从 Firefox 导入成功后显示的提示。"
+  },
+  "bootstrapStageStarting": {
+    "message": "正在启动浏览器登录…",
+    "description": "登录进度：流程正在启动。"
+  },
+  "bootstrapStageBrowser": {
+    "message": "正在后台通过网站人机检查，请稍候…",
+    "description": "登录进度：浏览器正在通过人机检查。"
+  },
+  "bootstrapStageWaiting": {
+    "message": "正在等待你的输入…",
+    "description": "登录进度：流程正在等待用户输入。"
+  },
+  "bootstrapStageExchanging": {
+    "message": "正在交换登录凭据…",
+    "description": "登录进度：正在交换凭据。"
+  },
+  "bootstrapWaitingLogin": {
+    "message": "正在等待浏览器登录…",
+    "description": "登录进度的兜底文字。"
+  },
+  "bootstrapButtonSigningIn": {
+    "message": "登录中…点击取消",
+    "description": "登录流程运行时登录按钮的文案。"
+  },
+  "credStatusSignedIn": {
+    "message": "已登录，可自动续期凭据",
+    "description": "登录成功后显示的账户标签。"
+  },
+  "noticeLoginSuccess": {
+    "message": "登录成功，凭据已保存，之后会自动续期。",
+    "description": "登录成功后显示的提示。"
+  },
+  "bootstrapIncomplete": {
+    "message": "登录未完成。",
+    "description": "登录流程未成功结束时显示的进度文字。"
+  },
+  "bootstrapTimeout": {
+    "message": "登录等待超时，已停止监控进度。可重新点击“浏览器登录”重试。",
+    "description": "达到登录轮询上限时显示的提示。"
+  },
+  "bootstrapHintCaptcha": {
+    "message": "请输入图片中的字符",
+    "description": "图片验证码输入框上方的提示。"
+  },
+  "bootstrapHintTotp": {
+    "message": "请输入验证器应用中的 6 位动态验证码",
+    "description": "验证器动态验证码输入框上方的提示。"
+  },
+  "bootstrapHintEmail": {
+    "message": "请输入 Mozilla 发送到邮箱的 6 位验证码",
+    "description": "邮件验证码输入框上方的提示。"
+  },
+  "bootstrapNeedCaptcha": {
+    "message": "需要输入图片验证码：请在下方输入后提交。",
+    "description": "出现图片验证码时显示的提示。"
+  },
+  "bootstrapNeedTotp": {
+    "message": "需要输入验证器动态验证码：请在下方输入后提交。",
+    "description": "需要验证器动态验证码时显示的提示。"
+  },
+  "bootstrapNeedEmail": {
+    "message": "需要输入邮件验证码：请在下方输入后提交。",
+    "description": "需要邮件验证码时显示的提示。"
+  },
+  "bootstrapErrCaptchaEmpty": {
+    "message": "请输入图片中的字符。",
+    "description": "图片验证码答案为空时的校验错误。"
+  },
+  "bootstrapErrCodeEmpty": {
+    "message": "请输入 6 位邮件验证码。",
+    "description": "验证码为空时的校验错误。"
+  },
+  "bootstrapSubmitted": {
+    "message": "已提交，等待校验…",
+    "description": "提交验证码或图片验证码答案后的进度文字。"
+  },
+  "bootstrapErrEmailAt": {
+    "message": "邮箱需要包含 @（例如 you@example.com）。",
+    "description": "输入无效邮箱时的校验提示。"
+  },
+  "bootstrapErrPassword": {
+    "message": "请再填写账号密码。",
+    "description": "缺少密码时的校验提示。"
+  },
+  "bootstrapErrFormIncomplete": {
+    "message": "请填写邮箱（需包含 @）和密码。",
+    "description": "登录表单不完整时的校验错误。"
+  },
+  "bootstrapOpening": {
+    "message": "正在后台打开登录浏览器…约 20–40 秒后下方会出现验证码，请按提示输入。",
+    "description": "提交登录表单后立即显示的进度文字。"
+  },
+  "bootstrapCancelRequested": {
+    "message": "已请求取消浏览器登录，正在等待流程结束…",
+    "description": "请求取消后显示的进度文字。"
+  },
+  "bootstrapUnavailableTitle": {
+    "message": "浏览器登录组件未安装，请重新运行安装脚本",
+    "description": "浏览器登录组件不可用时的悬停提示。"
+  },
+  "bootstrapReloginTitle": {
+    "message": "重新登录（将覆盖现有凭据）",
+    "description": "已有凭据时登录按钮的悬停提示。"
+  },
+  "bootstrapLoginTitle": {
+    "message": "在弹出的浏览器窗口中登录 Mozilla 账户",
+    "description": "没有凭据时登录按钮的悬停提示。"
+  },
+  "usageQuerying": {
+    "message": "正在查询 Mozilla 本月用量…",
+    "description": "查询用量时显示的用量行文字。"
+  },
+  "usageUnlimited": {
+    "message": "本月流量：不限量",
+    "description": "账户没有流量上限时的用量行文字。"
+  },
+  "usagePlan": {
+    "message": "套餐 $1 · 已使用 $2 · 剩余 $3",
+    "description": "用量摘要。$1 为套餐额度，$2 为已用额度，$3 为剩余额度。",
+    "placeholders": {
+      "1": { "content": "$1", "example": "50.0 GB" },
+      "2": { "content": "$2", "example": "12.3 GB" },
+      "3": { "content": "$3", "example": "37.7 GB" }
+    }
+  },
+  "usageResetSuffix": {
+    "message": " · 重置 $1",
+    "description": "已知重置时间时追加到用量摘要后。$1 为重置时间。",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "2026-01-01 00:00 UTC"
+      }
+    }
+  },
+  "confirmRemoveLocal": {
+    "message": "删除本地组件？\n\n扩展会保留，但 VPN 将无法使用，直到重新安装本地组件。",
+    "description": "删除本地组件前的确认对话框。"
+  },
+  "noticeRemovingLocal": {
+    "message": "本地组件正在删除。",
+    "description": "正在删除本地组件时显示的提示。"
+  },
+  "confirmFullUninstall": {
+    "message": "完整卸载 Firefox IP Protection Bridge？\n\n这会关闭 VPN、删除本地组件和凭据，并从 Chrome 卸载扩展。",
+    "description": "完整卸载前的确认对话框。"
+  }
+}

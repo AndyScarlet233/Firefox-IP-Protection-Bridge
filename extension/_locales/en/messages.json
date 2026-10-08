@@ -1,0 +1,1283 @@
+{
+  "extName": {
+    "message": "Firefox IP Protection Bridge (Unofficial)",
+    "description": "Extension name shown in the Chrome toolbar and the extensions page."
+  },
+  "extShortName": {
+    "message": "IP Bridge",
+    "description": "Short extension name used where space is limited."
+  },
+  "extDescription": {
+    "message": "Use Firefox IP Protection in Chrome via a local bridge: allowlist/blocklist routing, route-scoped DNS and WebRTC leak protection.",
+    "description": "Extension description shown on the Chrome extensions page. Chrome caps this at 132 characters."
+  },
+  "actionTitle": {
+    "message": "Firefox IP Protection Bridge (Unofficial)",
+    "description": "Tooltip for the toolbar button."
+  },
+
+  "brandBeta": {
+    "message": "BETA",
+    "description": "Badge next to the product name in the popup header."
+  },
+  "infoButtonTitle": {
+    "message": "Help and status",
+    "description": "Tooltip and accessible label for the info button."
+  },
+  "headlineOff": {
+    "message": "VPN is off",
+    "description": "Headline shown while the VPN is disconnected."
+  },
+  "powerOn": {
+    "message": "Turn on VPN",
+    "description": "Main button label while the VPN is off."
+  },
+  "locationRec": {
+    "message": "Recommended (automatic)",
+    "description": "Default exit-location option."
+  },
+  "locationLabel": {
+    "message": "Location: recommended",
+    "description": "Location row label before a country name is known."
+  },
+  "countrySelectAria": {
+    "message": "VPN exit location",
+    "description": "Accessible label for the exit-location dropdown."
+  },
+  "siteRowTitle": {
+    "message": "Use VPN for this site",
+    "description": "Label of the per-site VPN switch."
+  },
+  "siteNoPage": {
+    "message": "Open a web page to set this per site",
+    "description": "Shown when the active tab cannot be routed individually."
+  },
+  "settingsRow": {
+    "message": "Settings",
+    "description": "Label of the settings row."
+  },
+  "modeAllowlist": {
+    "message": "Allowlist",
+    "description": "Name of the allowlist proxy mode."
+  },
+  "modeBlacklist": {
+    "message": "Blocklist",
+    "description": "Name of the blocklist proxy mode."
+  },
+  "proxyModeLabel": {
+    "message": "Proxy mode",
+    "description": "Label of the proxy-mode setting block."
+  },
+  "modeDescAllowlist": {
+    "message": "Only sites on the allowlist use the VPN; everything else stays direct.",
+    "description": "Explanation of allowlist mode."
+  },
+  "autoConnectLabel": {
+    "message": "Connect automatically at startup",
+    "description": "Label of the auto-connect setting."
+  },
+  "autoConnectDetail": {
+    "message": "After Chrome starts, the local component starts first and traffic is only routed once the proxy is confirmed ready.",
+    "description": "Explanation of the auto-connect setting."
+  },
+  "autoConnectHelp": {
+    "message": "If the connection fails, Chrome stays direct instead of losing network access.",
+    "description": "Help text under the auto-connect setting."
+  },
+  "privacyProtectionLabel": {
+    "message": "Privacy protection",
+    "description": "Heading of the privacy settings block."
+  },
+  "webrtcTitle": {
+    "message": "WebRTC leak protection",
+    "description": "Title of the WebRTC leak protection row."
+  },
+  "webrtcDetailDefault": {
+    "message": "Stops WebRTC from bypassing the proxy and exposing your real IP. Protection can stay on even while the VPN is off.",
+    "description": "Default description of WebRTC leak protection."
+  },
+  "dnsTitle": {
+    "message": "DNS prefetch protection",
+    "description": "Title of the DNS prefetch protection row."
+  },
+  "dnsDetailDefault": {
+    "message": "Disables DNS prefetch only for pages that actually use the VPN; direct pages keep Chrome's normal prefetch and preconnect acceleration.",
+    "description": "Default description of DNS prefetch protection."
+  },
+  "regionTitle": {
+    "message": "Region privacy protection",
+    "description": "Title of the region privacy protection row."
+  },
+  "regionDetailDefault": {
+    "message": "Aligns language, time zone and exit location only for sites that actually use the VPN; explicitly exempted sites keep the browser's native environment.",
+    "description": "Default description of region privacy protection."
+  },
+  "regionProfilePending": {
+    "message": "The current profile is generated automatically once the VPN connects.",
+    "description": "Placeholder for the region profile line."
+  },
+  "regionPageDiagPending": {
+    "message": "Live page check: waiting for a test.",
+    "description": "Placeholder for the live page diagnostic line."
+  },
+  "regionHelp": {
+    "message": "When enabled, this applies only to ordinary web pages that actually use the VPN: it adjusts Accept-Language, navigator.language(s), the Intl default region/time zone and the time-zone offset, blocks precise geolocation, and masks the Canvas/FontFaceSet availability probes used for common Chinese fonts. Direct sites keep the browser's native language and time-zone environment.",
+    "description": "Help text explaining what region privacy protection does."
+  },
+  "webrtcHelp": {
+    "message": "WebRTC protection can force some voice or video calls onto TCP or prevent a direct peer connection. Domains that reach a page over SOCKS5 are still resolved by the proxy.",
+    "description": "Help text warning about WebRTC protection side effects."
+  },
+  "addButton": {
+    "message": "Add",
+    "description": "Button that adds a domain to the managed list."
+  },
+  "domainInputPlaceholder": {
+    "message": "example.com",
+    "description": "Placeholder of the domain input field."
+  },
+  "domainListEmpty": {
+    "message": "No sites yet",
+    "description": "Shown when the managed domain list is empty."
+  },
+  "domainListHelp": {
+    "message": "A rule covers that domain and its subdomains; known site families such as ChatGPT, Claude and Bilibili expand to their core domains automatically. Unrecognized third-party CDNs still have to be added one by one.",
+    "description": "Help text explaining how domain rules and site families work."
+  },
+  "importButton": {
+    "message": "Import",
+    "description": "Button that expands the rule import panel."
+  },
+  "exportButton": {
+    "message": "Export",
+    "description": "Button that exports the current rule list."
+  },
+  "ruleImportPlaceholder": {
+    "message": "Paste a domain list, one per line; a JSON array works too.",
+    "description": "Placeholder of the rule import textarea."
+  },
+  "copyButton": {
+    "message": "Copy",
+    "description": "Button that copies the textarea content."
+  },
+  "copyBoxTitle": {
+    "message": "Copy the textarea content",
+    "description": "Tooltip of the copy button."
+  },
+  "confirmImportTitle": {
+    "message": "Merge the textarea content into the current list",
+    "description": "Tooltip of the confirm-import button."
+  },
+  "clearButton": {
+    "message": "Clear",
+    "description": "Button that empties the textarea."
+  },
+  "clearBoxTitle": {
+    "message": "Empty the textarea",
+    "description": "Tooltip of the clear button."
+  },
+  "mozillaAccountLabel": {
+    "message": "Mozilla account",
+    "description": "Heading of the Mozilla account block."
+  },
+  "checking": {
+    "message": "Checking…",
+    "description": "Placeholder while the account state is being read."
+  },
+  "browserLoginButton": {
+    "message": "Sign in via browser",
+    "description": "Button that starts the browser login flow."
+  },
+  "importFirefoxButton": {
+    "message": "Import from Firefox",
+    "description": "Button that imports the Firefox session."
+  },
+  "emailPlaceholder": {
+    "message": "Mozilla account email",
+    "description": "Placeholder of the account email field."
+  },
+  "passwordPlaceholder": {
+    "message": "Account password (not stored)",
+    "description": "Placeholder of the account password field."
+  },
+  "startLoginButton": {
+    "message": "Start sign-in",
+    "description": "Button that submits the credentials."
+  },
+  "collapseButton": {
+    "message": "Collapse",
+    "description": "Button that hides the credential form."
+  },
+  "captchaImgAlt": {
+    "message": "Image captcha",
+    "description": "Alternative text for the captcha image."
+  },
+  "codeInputPlaceholder": {
+    "message": "6-digit code",
+    "description": "Placeholder of the emailed verification code field."
+  },
+  "captchaInputPlaceholder": {
+    "message": "Characters in the image",
+    "description": "Placeholder of the captcha answer field."
+  },
+  "submitButton": {
+    "message": "Submit",
+    "description": "Button that submits a verification code or captcha answer."
+  },
+  "usageLabel": {
+    "message": "Usage this month",
+    "description": "Heading of the usage block."
+  },
+  "queryButton": {
+    "message": "Check",
+    "description": "Button that queries the monthly usage."
+  },
+  "usageDefault": {
+    "message": "Usage is counted by Mozilla's servers",
+    "description": "Default text of the usage line."
+  },
+  "localComponentLabel": {
+    "message": "Local component",
+    "description": "Heading of the local component block."
+  },
+  "onDemand": {
+    "message": "Runs on demand",
+    "description": "Note that the local component only runs when needed."
+  },
+  "installPathLoading": {
+    "message": "Reading the install location…",
+    "description": "Placeholder while the install path is being read."
+  },
+  "removeLocalButton": {
+    "message": "Delete local component",
+    "description": "Button that removes the local component."
+  },
+  "fullUninstallButton": {
+    "message": "Full uninstall",
+    "description": "Button that uninstalls everything."
+  },
+
+  "countryUnavailable": {
+    "message": "$1 (unavailable)",
+    "description": "Exit-location option label for a country that has no nodes right now. $1 is the country name.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "Germany"
+      }
+    }
+  },
+
+  "errBackgroundNoResponse": {
+    "message": "The background service did not respond. Reload the extension and try again.",
+    "description": "Error shown when the service worker cannot be reached."
+  },
+  "errBackgroundNoResult": {
+    "message": "The background service returned no result.",
+    "description": "Error shown when the service worker answers with an empty response."
+  },
+  "errOperationFailed": {
+    "message": "The operation failed.",
+    "description": "Generic fallback error."
+  },
+  "errNativeHostNotFound": {
+    "message": "The local bridge was not found. Run INSTALL-OR-REPAIR.cmd to repair it; after that the extension folder can be moved or renamed.",
+    "description": "Translation of Chrome's native messaging host not found error."
+  },
+  "errNativeHostCommunicate": {
+    "message": "Communication with the local bridge failed. Make sure runtime\\vpn_bridge_host.exe is installed, run INSTALL-OR-REPAIR.cmd to repair it, then restart the browser.",
+    "description": "Translation of Chrome's native messaging communication error."
+  },
+  "errNativeHostExited": {
+    "message": "The local bridge exited. Try again, or run INSTALL-OR-REPAIR.cmd to repair it.",
+    "description": "Translation of Chrome's native host exited error."
+  },
+  "errNativeHostForbidden": {
+    "message": "Chrome is not allowed to access the local bridge. Make sure the extension ID matches the one registered by the install script.",
+    "description": "Translation of Chrome's forbidden native messaging host error."
+  },
+  "errNativeHostForbiddenRegistered": {
+    "message": "Chrome is not allowed to access the local bridge. Make sure the extension was registered by the current install script.",
+    "description": "Variant of the forbidden native messaging host error used by the service worker."
+  },
+  "errNativeNoResponse": {
+    "message": "The local bridge returned no response.",
+    "description": "Error shown when the native bridge answers with nothing."
+  },
+  "errNativeTimeout": {
+    "message": "The local bridge timed out while running $1.",
+    "description": "Error shown when a native command times out. $1 is the command name.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "start"
+      }
+    }
+  },
+  "errNativeDisconnected": {
+    "message": "The local bridge disconnected.",
+    "description": "Error shown when the native messaging port closes."
+  },
+  "errProxyControlled": {
+    "message": "Chrome's proxy settings are being controlled by another extension or by an administrator policy.",
+    "description": "Error shown by the service worker when the proxy setting cannot be changed."
+  },
+  "errProxyControlledPopup": {
+    "message": "Chrome's proxy settings are currently controlled by another extension or by an administrator policy.",
+    "description": "Error shown in the popup when the proxy setting cannot be changed."
+  },
+  "errUnknownCommand": {
+    "message": "The extension received an unknown command.",
+    "description": "Error shown for an unrecognized popup command."
+  },
+  "errUnknownExtensionCommand": {
+    "message": "Unknown extension command: $1",
+    "description": "Error naming the unrecognized command. $1 is the command name.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "\"sync\""
+      }
+    }
+  },
+  "errNoNodes": {
+    "message": "No nodes are available in the selected region. Choose a different region.",
+    "description": "Error shown when the selected region has no usable exit node."
+  },
+  "errOutdatedBackend": {
+    "message": "An older background service is still running. Run the 1.0.0 INSTALL-OR-REPAIR.cmd, then reload this extension on the extensions page.",
+    "description": "Error shown when the installed local component is too old."
+  },
+  "errMissingRenewalCredentials": {
+    "message": "No renewable Firefox sign-in state was found. Click \"Import from Firefox\" first, then query the usage again.",
+    "description": "Error shown when usage is queried without renewable credentials."
+  },
+  "errAccountReauth": {
+    "message": "The Firefox account session has expired. Sign in again in Firefox and import the session once more.",
+    "description": "Error shown when the imported Firefox account session expired."
+  },
+  "errUsageRateLimited": {
+    "message": "Mozilla is temporarily limiting account queries. Try again later.",
+    "description": "Error shown when the usage endpoint rate-limits the request."
+  },
+  "errUsageTemporary": {
+    "message": "The Mozilla usage query failed temporarily. Try again shortly.",
+    "description": "Error shown for a transient usage query failure."
+  },
+  "errUsage403": {
+    "message": "This Mozilla account has no usable Firefox IP Protection entitlement.",
+    "description": "Error shown when the account is not entitled to Firefox IP Protection."
+  },
+  "errUsage401": {
+    "message": "The Firefox account authorization has expired. Import the sign-in state again.",
+    "description": "Error shown when the usage query is unauthorized."
+  },
+  "errHttp451": {
+    "message": "Mozilla rejected the request from the current network exit (HTTP 451, unrelated to your account). This usually means the exit region is temporarily restricted: try again later; once the tunnel is up, credential renewal automatically goes out through the tunnel. If it keeps happening, write a working HTTP proxy to runtime\\tokens\\refresh_proxy.txt.",
+    "description": "Error shown when Mozilla answers with HTTP 451."
+  },
+  "errRenewalPaused": {
+    "message": "The current network exit is temporarily rejected by Mozilla (HTTP 451). Try again later; this is not an account problem.",
+    "description": "Error shown when automatic renewal is paused because the service is restricted."
+  },
+  "errGenericUnknown": {
+    "message": "Unknown",
+    "description": "Fallback label for an unknown value."
+  },
+  "errUnreadableUsage": {
+    "message": "No readable usage information was returned.",
+    "description": "Error shown when the usage payload cannot be parsed."
+  },
+  "errHelperError": {
+    "message": "The local bridge reported an error.",
+    "description": "Generic native bridge error used by the service worker."
+  },
+  "errNoDomainEntered": {
+    "message": "Enter a website domain.",
+    "description": "Validation error for an empty domain."
+  },
+  "errDomainInvalid": {
+    "message": "That website address does not look valid.",
+    "description": "Validation error for a malformed domain."
+  },
+  "errProxyUnreadable": {
+    "message": "Chrome's proxy state could not be read.",
+    "description": "Error shown when the proxy setting cannot be read."
+  },
+  "errProxyUnreadableRestore": {
+    "message": "Could not confirm that Chrome's proxy state was restored to direct.",
+    "description": "Error shown when fail-open cannot be verified."
+  },
+  "errProxyControlOther": {
+    "message": "Chrome's proxy settings are controlled by another extension or by an administrator policy.",
+    "description": "Error shown when another extension owns the proxy setting."
+  },
+  "errProxyNotApplied": {
+    "message": "Chrome's proxy setting did not take effect in time. Try again.",
+    "description": "Error shown when the PAC script is not observed after being set."
+  },
+  "errStorageSaveFailed": {
+    "message": "The VPN state could not be saved.",
+    "description": "Error shown when persisting state fails."
+  },
+  "errSocksUnhealthy": {
+    "message": "The local SOCKS5 proxy did not pass the upstream connectivity check after starting.",
+    "description": "Error shown when the local SOCKS5 listener is not healthy after start."
+  },
+  "errSocksUnhealthyCountry": {
+    "message": "The local SOCKS5 proxy did not pass the upstream connectivity check after switching location.",
+    "description": "Error shown when the local SOCKS5 listener is not healthy after a location change."
+  },
+  "errProxyReleasing": {
+    "message": "The local proxy process is still shutting down. Try again in a moment, or reload the extension.",
+    "description": "Error shown while the local proxy port is still being released."
+  },
+  "errRestoreDirectShort": {
+    "message": "Could not confirm that Chrome was restored to a direct connection.",
+    "description": "Short error shown by the service worker when fail-open cannot be verified."
+  },
+  "errRestoreDirect": {
+    "message": "Could not confirm that Chrome was restored to a direct connection. Reload the extension or restart Chrome.",
+    "description": "Error shown when Chrome cannot be confirmed direct."
+  },
+  "errImportNotJson": {
+    "message": "The imported content is not a valid JSON array.",
+    "description": "Error shown when pasted JSON cannot be parsed."
+  },
+  "errImportNotArray": {
+    "message": "The imported content must be an array.",
+    "description": "Error shown when pasted JSON is not an array."
+  },
+  "errImportNoDomains": {
+    "message": "No importable domains were found.",
+    "description": "Error shown when the pasted rule list contains no domains."
+  },
+  "errImportNoDomainsShort": {
+    "message": "There are no domains to import.",
+    "description": "Shorter variant of the empty-import error."
+  },
+  "errRestoreDirectNoCleanup": {
+    "message": "Could not confirm that Chrome was restored to a direct connection, so no local cleanup was performed.",
+    "description": "Error shown when cleanup is aborted because fail-open could not be verified."
+  },
+  "errSocksStoppedRecovered": {
+    "message": "The local SOCKS5 proxy stopped; Chrome was restored to a direct connection.",
+    "description": "Status explaining that a dead proxy was recovered."
+  },
+  "errProxyAbnormalRecovered": {
+    "message": "Chrome's proxy state was abnormal; Chrome was restored to a direct connection.",
+    "description": "Status explaining that an abnormal proxy state was recovered."
+  },
+  "errSocksStoppedRecovering": {
+    "message": "The local SOCKS5 proxy stopped; recovering automatically.",
+    "description": "Status while the watchdog restarts a dead proxy."
+  },
+  "errSocksUnhealthyRecovering": {
+    "message": "The local SOCKS5 proxy failed its health check; recovering automatically.",
+    "description": "Status while the watchdog restarts an unhealthy proxy."
+  },
+  "errEmailPasswordRequired": {
+    "message": "Enter the email and password.",
+    "description": "Error shown when the login form is submitted incomplete."
+  },
+  "errUnknownPrivacyOption": {
+    "message": "Unknown privacy setting.",
+    "description": "Error shown for an unrecognized privacy option."
+  },
+  "errUnknownRegionOption": {
+    "message": "Unknown region privacy setting.",
+    "description": "Error shown for an unrecognized region privacy option."
+  },
+  "errPrivacyUnsupported": {
+    "message": "$1: Chrome does not support this privacy setting.",
+    "description": "Error shown when a privacy setting is unavailable. $1 is the setting label.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "WebRTC leak protection"
+      }
+    }
+  },
+  "errPrivacyControlled": {
+    "message": "$1 cannot be changed: the setting is controlled by another extension or by an administrator policy.",
+    "description": "Error shown when a privacy setting is owned elsewhere. $1 is the setting label.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "WebRTC leak protection"
+      }
+    }
+  },
+  "labelWebrtcLeakProtection": {
+    "message": "WebRTC leak protection",
+    "description": "Label used as the privacy-setting name in errors."
+  },
+  "regionErrorLanguageHeader": {
+    "message": "Language request header: $1",
+    "description": "Prefix for a region shield error from the Accept-Language header rule. $1 is the error message.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "rule update failed"
+      }
+    }
+  },
+  "regionErrorGeolocation": {
+    "message": "Geolocation: $1",
+    "description": "Prefix for a region shield error from the geolocation setting. $1 is the error message.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "setting update failed"
+      }
+    }
+  },
+  "errUninstallFailed": {
+    "message": "Uninstall failed: $1",
+    "description": "Error shown when the full uninstall flow fails. $1 is the error message.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "native host unavailable"
+      }
+    }
+  },
+  "errUnknownError": {
+    "message": "Unknown error",
+    "description": "Fallback error text."
+  },
+  "errAutoConnectFailed": {
+    "message": "Automatic connect at startup failed: $1",
+    "description": "Persisted error explaining a failed startup auto-connect. $1 is the error message.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "no nodes available"
+      }
+    }
+  },
+  "actionTitleConnectingAuto": {
+    "message": "Connecting the VPN automatically…",
+    "description": "Toolbar tooltip while the startup auto-connect runs."
+  },
+  "actionTitleOn": {
+    "message": "VPN is on · $1",
+    "description": "Toolbar tooltip while the VPN is connected. $1 is the proxy mode.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "Allowlist"
+      }
+    }
+  },
+  "actionTitleOff": {
+    "message": "VPN is off",
+    "description": "Toolbar tooltip while the VPN is disconnected."
+  },
+
+  "statusReading": {
+    "message": "Reading status…",
+    "description": "Headline while the status is being read."
+  },
+  "statusConnecting": {
+    "message": "Connecting…",
+    "description": "Headline while the tunnel is being established."
+  },
+  "statusSwitching": {
+    "message": "Switching location…",
+    "description": "Headline while the exit location is changing."
+  },
+  "statusDisconnecting": {
+    "message": "Turning off…",
+    "description": "Headline while the tunnel is being torn down."
+  },
+  "headlineOn": {
+    "message": "VPN is on",
+    "description": "Headline while the VPN is connected."
+  },
+  "powerReading": {
+    "message": "Reading…",
+    "description": "Main button label while the status is being read."
+  },
+  "powerConnecting": {
+    "message": "Connecting…",
+    "description": "Main button label while the tunnel is being established."
+  },
+  "powerSwitching": {
+    "message": "Switching…",
+    "description": "Main button label while the exit location is changing."
+  },
+  "powerDisconnecting": {
+    "message": "Turning off…",
+    "description": "Main button label while the tunnel is being torn down."
+  },
+  "powerOff": {
+    "message": "Turn off VPN",
+    "description": "Main button label while the VPN is connected."
+  },
+  "locationPrefix": {
+    "message": "Location: $1",
+    "description": "Location row label. $1 is the country name.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "Germany"
+      }
+    }
+  },
+  "modeHintChecking": {
+    "message": "Checking the local proxy…",
+    "description": "Hint shown while the local proxy is inspected."
+  },
+  "modeHintRestoring": {
+    "message": "Restoring Chrome's direct connection…",
+    "description": "Hint shown while the tunnel is being torn down."
+  },
+  "modeHintVerifying": {
+    "message": "Verifying the local proxy…",
+    "description": "Hint shown while the local proxy is being verified."
+  },
+  "modeHintAllowlistCount": {
+    "message": "Allowlist · $1 site(s)",
+    "description": "Mode hint in allowlist mode. $1 is the number of sites.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "modeHintBlocklistCount": {
+    "message": "Blocklist · $1 direct site(s)",
+    "description": "Mode hint in blocklist mode with direct sites. $1 is the number of sites.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "modeHintBlocklistAll": {
+    "message": "Blocklist · everything uses the VPN by default",
+    "description": "Mode hint in blocklist mode with an empty list."
+  },
+
+  "credRefreshHint": {
+    "message": "Open Firefox once, or import the sign-in state again, to refresh it.",
+    "description": "Suffix explaining how to refresh stale credentials."
+  },
+  "credRenewalFailures": {
+    "message": "Renewal failed $1 time(s) recently; $2",
+    "description": "Credential freshness warning after renewal failures. $1 is the failure count, $2 the refresh hint.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "2"
+      },
+      "2": {
+        "content": "$2",
+        "example": "Open Firefox once, or import the sign-in state again, to refresh it."
+      }
+    }
+  },
+  "credStaleDays": {
+    "message": "Credentials have not been refreshed for $1 day(s); $2",
+    "description": "Credential freshness warning when credentials are old. $1 is the age in days, $2 the refresh hint.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "20"
+      },
+      "2": {
+        "content": "$2",
+        "example": "Open Firefox once, or import the sign-in state again, to refresh it."
+      }
+    }
+  },
+  "credStaleDaysShort": {
+    "message": "Credentials have not been refreshed for $1 day(s).",
+    "description": "Credential freshness warning without the refresh hint. $1 is the age in days.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "credVerifiedHours": {
+    "message": "Credentials were verified $1 hour(s) ago.",
+    "description": "Credential freshness confirmation. $1 is the age in hours.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+
+  "webrtcActive": {
+    "message": "WebRTC is blocked from using non-proxied UDP; this also applies while the VPN is off.",
+    "description": "WebRTC detail when the protection is effective."
+  },
+  "webrtcBlocked": {
+    "message": "This setting cannot be taken over right now: it is controlled by another extension or by an administrator policy.",
+    "description": "WebRTC detail when the setting is owned elsewhere."
+  },
+  "webrtcOff": {
+    "message": "Off; Chrome uses its original WebRTC IP policy.",
+    "description": "WebRTC detail when the protection is disabled."
+  },
+  "dnsOff": {
+    "message": "Off; every site uses Chrome's normal DNS prefetch.",
+    "description": "DNS detail when the protection is disabled."
+  },
+  "dnsStandby": {
+    "message": "Standing by; once the VPN is on, only pages that actually use the VPN are protected and direct sites are unaffected.",
+    "description": "DNS detail while the VPN is off."
+  },
+  "dnsRouteScoped": {
+    "message": "Active per route: DNS prefetch is disabled for VPN pages, while direct pages keep native prefetch/preconnect.",
+    "description": "DNS detail when route-scoped protection is active."
+  },
+  "dnsEmptyAllowlist": {
+    "message": "The allowlist is empty, so no page uses the VPN and DNS protection has nothing to do.",
+    "description": "DNS detail when allowlist mode has no entries."
+  },
+  "dnsUnsupported": {
+    "message": "This Chrome build does not support changing DNS prefetch control per route.",
+    "description": "DNS detail when route-scoped control is unavailable."
+  },
+  "dnsSyncing": {
+    "message": "Syncing the route-scoped DNS protection rules.",
+    "description": "DNS detail while rules are being applied."
+  },
+  "regionOff": {
+    "message": "Off; sites see Chrome's original language, time zone, fonts and location hints.",
+    "description": "Region detail when the protection is disabled."
+  },
+  "regionStandby": {
+    "message": "Standing by; once the VPN connects it applies only to pages that actually use the VPN.",
+    "description": "Region detail while the VPN is off."
+  },
+  "regionActive": {
+    "message": "Reducing language, time-zone, location and Chinese-font hints for pages that actually use the VPN.",
+    "description": "Region detail when the protection is active."
+  },
+  "regionWaiting": {
+    "message": "On; waiting for the VPN to connect.",
+    "description": "Region detail while waiting for the VPN connection."
+  },
+  "regionProfileCurrent": {
+    "message": "Current profile: $1 · $2 · $3. Open pages sync automatically.",
+    "description": "Current region profile summary. $1 is the country, $2 the locale, $3 the time zone.",
+    "placeholders": {
+      "1": { "content": "$1", "example": "Germany" },
+      "2": { "content": "$2", "example": "de-DE" },
+      "3": { "content": "$3", "example": "Europe/Berlin" }
+    }
+  },
+  "modeDescBlocklist": {
+    "message": "Every site uses the VPN by default except the direct sites on the blocklist.",
+    "description": "Explanation of blocklist mode."
+  },
+  "listTitleAllowlist": {
+    "message": "Allowlist that uses the VPN",
+    "description": "Title of the managed list in allowlist mode."
+  },
+  "listTitleBlocklist": {
+    "message": "Blocklist that connects directly",
+    "description": "Title of the managed list in blocklist mode."
+  },
+  "listEmptyAllowlist": {
+    "message": "The allowlist is empty, so no site currently uses the VPN.",
+    "description": "Empty-state text in allowlist mode."
+  },
+  "listEmptyBlocklist": {
+    "message": "The blocklist is empty, so every site currently uses the VPN.",
+    "description": "Empty-state text in blocklist mode."
+  },
+  "removeDomainTitle": {
+    "message": "Delete $1",
+    "description": "Tooltip of the per-domain delete button. $1 is the domain.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+
+  "diagRegionOff": {
+    "message": "Live page check: region privacy protection is off.",
+    "description": "Diagnostic line when region privacy protection is disabled."
+  },
+  "diagVpnOff": {
+    "message": "Live page check: the VPN is not connected, region protection is standing by.",
+    "description": "Diagnostic line while the VPN is off."
+  },
+  "diagUnsupportedPage": {
+    "message": "Live page check: this page cannot be tested.",
+    "description": "Diagnostic line for a page that cannot be tested."
+  },
+  "diagNoResult": {
+    "message": "No result was returned.",
+    "description": "Error shown when the in-page probe returns nothing."
+  },
+  "diagFontUnknown": {
+    "message": "fonts unknown",
+    "description": "Diagnostic fragment when the font probe could not run."
+  },
+  "diagFontLeak": {
+    "message": "Chinese fonts are still detectable",
+    "description": "Diagnostic fragment when Chinese fonts are still detectable."
+  },
+  "diagFontMasked": {
+    "message": "Chinese fonts are masked",
+    "description": "Diagnostic fragment when Chinese fonts are masked."
+  },
+  "diagLine": {
+    "message": "Live page check: $1 · $2 · $3$4",
+    "description": "Live page diagnostic summary. $1 is the language, $2 the time zone, $3 the font verdict, $4 the trailing status marker.",
+    "placeholders": {
+      "1": { "content": "$1", "example": "de-DE" },
+      "2": { "content": "$2", "example": "Europe/Berlin" },
+      "3": { "content": "$3", "example": "Chinese fonts are masked" },
+      "4": { "content": "$4", "example": " ✓" }
+    }
+  },
+  "diagOkSuffix": {
+    "message": " ✓",
+    "description": "Suffix appended to the diagnostic line when everything matches."
+  },
+  "diagPartialSuffix": {
+    "message": " (not fully applied, refresh the page)",
+    "description": "Suffix appended to the diagnostic line when the protection is incomplete."
+  },
+  "diagNotInjected": {
+    "message": "Live page check: the protection script is not loaded yet. Refresh this page.",
+    "description": "Diagnostic line when the content script has not run."
+  },
+  "diagFontProbeText": {
+    "message": "CJK font probe ABCabc012",
+    "description": "Text measured by the in-page font probe; keep it free of characters that must not leak."
+  },
+
+  "noticeReadingStatus": {
+    "message": "Reading the VPN status…",
+    "description": "Notice shown while the status is being read."
+  },
+  "errLocationListTimeout": {
+    "message": "Loading the list of available regions timed out.",
+    "description": "Error shown when the exit-location list takes too long."
+  },
+  "warnLocationListStale": {
+    "message": "The list of available regions could not be refreshed right now: $1",
+    "description": "Warning shown when the exit-location list falls back to the cached one. $1 is the underlying error.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "Loading the list of available regions timed out."
+      }
+    }
+  },
+  "siteNotConfigurable": {
+    "message": "This page cannot be configured individually (only http/https pages are supported)",
+    "description": "Shown in the per-site row when the active tab is not configurable."
+  },
+  "installPathUnknown": {
+    "message": "No install location was returned",
+    "description": "Fallback for the install path."
+  },
+  "credStatusImported": {
+    "message": "Imported; access credentials renew automatically",
+    "description": "Account status when renewable credentials are present."
+  },
+  "credStatusNotSignedIn": {
+    "message": "No Firefox sign-in state imported yet",
+    "description": "Account status when no credentials are available."
+  },
+  "credStatusBridgeUnavailable": {
+    "message": "The local bridge is unavailable",
+    "description": "Account status when the local bridge cannot be reached."
+  },
+  "noticeAutoConnectRetrying": {
+    "message": "Automatic connect has not finished yet and is being retried in the background; you can also use the button above to connect right away.",
+    "description": "Notice shown while the startup auto-connect is still being retried."
+  },
+  "noticeWaitingBrowserLogin": {
+    "message": "Waiting for the browser sign-in…",
+    "description": "Progress text while the browser login flow runs."
+  },
+  "credStatusBridgeMissing": {
+    "message": "The local bridge was not found. Run the install or update script again.",
+    "description": "Account status when the local bridge is missing."
+  },
+  "noticeConnectingService": {
+    "message": "Connecting to the Firefox IP Protection service…",
+    "description": "Notice shown while the tunnel is being established."
+  },
+  "noticeDisconnecting": {
+    "message": "Disconnecting…",
+    "description": "Notice shown while the tunnel is being torn down."
+  },
+  "errSocksNotKeptAlive": {
+    "message": "The local SOCKS5 proxy could not be kept running; Chrome was restored to a direct connection.",
+    "description": "Error shown when the local proxy dies right after connecting."
+  },
+  "errDirectNotConfirmedReload": {
+    "message": "Could not confirm that Chrome was restored to a direct connection. Reload the extension or restart Chrome.",
+    "description": "Error shown when fail-open cannot be confirmed after a command."
+  },
+  "noticeConnectedRecommended": {
+    "message": "VPN connected; the recommended location is currently using $1.",
+    "description": "Notice shown after connecting with the recommended location. $1 is the resolved country name.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "Germany"
+      }
+    }
+  },
+  "noticeConnected": {
+    "message": "VPN connected.",
+    "description": "Notice shown after the VPN connects."
+  },
+  "noticeDisconnected": {
+    "message": "VPN turned off.",
+    "description": "Notice shown after the VPN disconnects."
+  },
+  "errCountrySwitchUnverified": {
+    "message": "The VPN state did not pass its check after switching location.",
+    "description": "Error shown when a location change cannot be verified."
+  },
+  "noticeCountrySwitched": {
+    "message": "Location switched.",
+    "description": "Notice shown after switching the exit location while connected."
+  },
+  "noticeCountrySaved": {
+    "message": "Location saved.",
+    "description": "Notice shown after saving the exit location while disconnected."
+  },
+  "noticeSiteUsesVpn": {
+    "message": "$1 now uses the VPN. Refresh open pages for it to take effect.",
+    "description": "Notice shown after routing a site through the VPN. $1 is the domain.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "noticeSiteDirect": {
+    "message": "$1 now connects directly. Refresh open pages for it to take effect.",
+    "description": "Notice shown after routing a site directly. $1 is the domain.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "noticeModeAllowlist": {
+    "message": "Switched to allowlist mode.",
+    "description": "Notice shown after switching to allowlist mode."
+  },
+  "noticeModeBlocklist": {
+    "message": "Switched to blocklist mode.",
+    "description": "Notice shown after switching to blocklist mode."
+  },
+  "noticeAutoConnectOn": {
+    "message": "Automatic connect at startup is on; the next Chrome launch starts the local component first and only turns the VPN on once the connection is ready.",
+    "description": "Notice shown after enabling auto-connect."
+  },
+  "noticeAutoConnectOff": {
+    "message": "Automatic connect at startup is off.",
+    "description": "Notice shown after disabling auto-connect."
+  },
+  "noticeWebrtcOn": {
+    "message": "WebRTC leak protection is on; it stays active even while the VPN is off.",
+    "description": "Notice shown after enabling WebRTC leak protection."
+  },
+  "noticeWebrtcOff": {
+    "message": "WebRTC leak protection is off; Chrome's original WebRTC policy has been restored.",
+    "description": "Notice shown after disabling WebRTC leak protection."
+  },
+  "noticeDnsOnActive": {
+    "message": "DNS prefetch protection is now active along the VPN route; direct sites are unaffected.",
+    "description": "Notice shown after enabling DNS protection while connected."
+  },
+  "noticeDnsOnStandby": {
+    "message": "DNS prefetch protection is on and will apply per route once the VPN connects.",
+    "description": "Notice shown after enabling DNS protection while disconnected."
+  },
+  "noticeDnsOff": {
+    "message": "DNS prefetch protection is off; Chrome keeps its normal DNS prefetch behaviour.",
+    "description": "Notice shown after disabling DNS protection."
+  },
+  "noticeRegionOn": {
+    "message": "Region privacy protection is on; once the VPN connects it applies only to pages that actually use the VPN.",
+    "description": "Notice shown after enabling region privacy protection."
+  },
+  "noticeRegionOff": {
+    "message": "Region privacy protection is off.",
+    "description": "Notice shown after disabling region privacy protection."
+  },
+  "noticeRuleAdded": {
+    "message": "The site rule was added.",
+    "description": "Notice shown after adding a domain rule."
+  },
+  "noticeCopiedToBox": {
+    "message": "The content was generated; copy it from the textarea by hand.",
+    "description": "Notice shown when the clipboard is unavailable."
+  },
+  "noticeExportEmptyAllowlist": {
+    "message": "The allowlist is empty, so there is nothing to export.",
+    "description": "Notice shown when exporting an empty allowlist."
+  },
+  "noticeExportEmptyBlocklist": {
+    "message": "The blocklist is empty, so there is nothing to export.",
+    "description": "Notice shown when exporting an empty blocklist."
+  },
+  "exportKindAllowlist": {
+    "message": "allowlist (uses the VPN)",
+    "description": "Label of the allowlist in exported text."
+  },
+  "exportKindBlocklist": {
+    "message": "blocklist (direct)",
+    "description": "Label of the blocklist in exported text."
+  },
+  "exportHeaderTitle": {
+    "message": "# Firefox VPN $1",
+    "description": "First line of the exported rule list. $1 is the list kind.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "allowlist (uses the VPN)"
+      }
+    }
+  },
+  "exportHeaderCount": {
+    "message": "# $1 entries in total",
+    "description": "Second line of the exported rule list. $1 is the number of entries.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "noticeCopiedRules": {
+    "message": "Copied $1 rule(s).",
+    "description": "Notice shown after copying the exported rules. $1 is the number of rules.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "errBoxEmpty": {
+    "message": "The textarea is empty, so there is nothing to copy.",
+    "description": "Error shown when copying an empty textarea."
+  },
+  "noticeBoxCopied": {
+    "message": "The textarea content was copied.",
+    "description": "Notice shown after copying the textarea content."
+  },
+  "errClipboardUnavailable": {
+    "message": "The clipboard is not accessible; select the text and copy it by hand.",
+    "description": "Error shown when the clipboard API is unavailable."
+  },
+  "errPasteRulesFirst": {
+    "message": "Paste the domain list you want to import into the textarea first.",
+    "description": "Error shown when importing from an empty textarea."
+  },
+  "importKindAllowlist": {
+    "message": "allowlist",
+    "description": "Label of the allowlist in import notices."
+  },
+  "importKindBlocklist": {
+    "message": "blocklist",
+    "description": "Label of the blocklist in import notices."
+  },
+  "noticeImportMerged": {
+    "message": "Merged $1 new rule(s); the $2 now holds $3.",
+    "description": "Notice shown after a successful import. $1 is the number of added rules, $2 the list kind, $3 the new total.",
+    "placeholders": {
+      "1": { "content": "$1", "example": "4" },
+      "2": { "content": "$2", "example": "allowlist" },
+      "3": { "content": "$3", "example": "16" }
+    }
+  },
+  "noticeImportNothingNew": {
+    "message": "No new rules; the $1 still holds $2.",
+    "description": "Notice shown when an import adds nothing. $1 is the list kind, $2 the total.",
+    "placeholders": {
+      "1": { "content": "$1", "example": "allowlist" },
+      "2": { "content": "$2", "example": "12" }
+    }
+  },
+  "noticeRuleRemoved": {
+    "message": "The site rule was deleted.",
+    "description": "Notice shown after deleting a domain rule."
+  },
+  "noticeImportingFirefox": {
+    "message": "Importing the sign-in state from the local Firefox…",
+    "description": "Progress text while importing from Firefox."
+  },
+  "credStatusImportedVerified": {
+    "message": "Imported and verified successfully",
+    "description": "Fallback account label after a successful import."
+  },
+  "noticeFirefoxImported": {
+    "message": "The Firefox sign-in state was imported successfully.",
+    "description": "Notice shown after a successful Firefox import."
+  },
+  "bootstrapStageStarting": {
+    "message": "Starting the browser sign-in…",
+    "description": "Login progress: the flow is starting."
+  },
+  "bootstrapStageBrowser": {
+    "message": "Passing the site's bot check in the background, please wait…",
+    "description": "Login progress: the browser is passing a bot check."
+  },
+  "bootstrapStageWaiting": {
+    "message": "Waiting for your input…",
+    "description": "Login progress: the flow waits for user input."
+  },
+  "bootstrapStageExchanging": {
+    "message": "Exchanging the sign-in credentials…",
+    "description": "Login progress: credentials are being exchanged."
+  },
+  "bootstrapWaitingLogin": {
+    "message": "Waiting for the browser sign-in…",
+    "description": "Fallback login progress text."
+  },
+  "bootstrapButtonSigningIn": {
+    "message": "Signing in… click to cancel",
+    "description": "Login button label while the flow runs."
+  },
+  "credStatusSignedIn": {
+    "message": "Signed in; credentials renew automatically",
+    "description": "Account label after a successful sign-in."
+  },
+  "noticeLoginSuccess": {
+    "message": "Signed in. The credentials were saved and will renew automatically from now on.",
+    "description": "Notice shown after a successful sign-in."
+  },
+  "bootstrapIncomplete": {
+    "message": "The sign-in did not complete.",
+    "description": "Login progress text when the flow ends without success."
+  },
+  "bootstrapTimeout": {
+    "message": "Timed out waiting for the sign-in and progress monitoring stopped. Click \"Sign in via browser\" to try again.",
+    "description": "Notice shown when the login poll limit is reached."
+  },
+  "bootstrapHintCaptcha": {
+    "message": "Enter the characters shown in the image",
+    "description": "Hint above the captcha input."
+  },
+  "bootstrapHintTotp": {
+    "message": "Enter the 6-digit code from your authenticator app",
+    "description": "Hint above the authenticator code input."
+  },
+  "bootstrapHintEmail": {
+    "message": "Enter the 6-digit code Mozilla sent to your email",
+    "description": "Hint above the emailed code input."
+  },
+  "bootstrapNeedCaptcha": {
+    "message": "An image captcha is required: type it below and submit.",
+    "description": "Notice shown when a captcha appears."
+  },
+  "bootstrapNeedTotp": {
+    "message": "An authenticator code is required: type it below and submit.",
+    "description": "Notice shown when an authenticator code is required."
+  },
+  "bootstrapNeedEmail": {
+    "message": "An email verification code is required: type it below and submit.",
+    "description": "Notice shown when an emailed code is required."
+  },
+  "bootstrapErrCaptchaEmpty": {
+    "message": "Enter the characters shown in the image.",
+    "description": "Validation error for an empty captcha answer."
+  },
+  "bootstrapErrCodeEmpty": {
+    "message": "Enter the 6-digit email verification code.",
+    "description": "Validation error for an empty verification code."
+  },
+  "bootstrapSubmitted": {
+    "message": "Submitted, waiting for verification…",
+    "description": "Progress text after a code or captcha answer is submitted."
+  },
+  "bootstrapErrEmailAt": {
+    "message": "The email address must contain @ (for example you@example.com).",
+    "description": "Validation hint while typing an invalid email."
+  },
+  "bootstrapErrPassword": {
+    "message": "Please also fill in the account password.",
+    "description": "Validation hint while the password is missing."
+  },
+  "bootstrapErrFormIncomplete": {
+    "message": "Fill in the email (it must contain @) and the password.",
+    "description": "Validation error when the login form is incomplete."
+  },
+  "bootstrapOpening": {
+    "message": "Opening the sign-in browser in the background… a captcha appears below after roughly 20-40 seconds; follow the prompts.",
+    "description": "Progress text right after the login form is submitted."
+  },
+  "bootstrapCancelRequested": {
+    "message": "Cancellation of the browser sign-in was requested; waiting for the flow to end…",
+    "description": "Progress text after requesting cancellation."
+  },
+  "bootstrapUnavailableTitle": {
+    "message": "The browser sign-in component is not installed. Run the install script again.",
+    "description": "Tooltip when the browser login component is unavailable."
+  },
+  "bootstrapReloginTitle": {
+    "message": "Sign in again (this overwrites the existing credentials)",
+    "description": "Tooltip of the login button when credentials exist."
+  },
+  "bootstrapLoginTitle": {
+    "message": "Sign in to your Mozilla account in a browser window",
+    "description": "Tooltip of the login button when no credentials exist."
+  },
+  "usageQuerying": {
+    "message": "Querying this month's Mozilla usage…",
+    "description": "Usage line while the query runs."
+  },
+  "usageUnlimited": {
+    "message": "Traffic this month: unlimited",
+    "description": "Usage line when the account has no cap."
+  },
+  "usagePlan": {
+    "message": "Plan $1 · used $2 · left $3",
+    "description": "Usage summary. $1 is the plan size, $2 the used amount, $3 the remaining amount.",
+    "placeholders": {
+      "1": { "content": "$1", "example": "50.0 GB" },
+      "2": { "content": "$2", "example": "12.3 GB" },
+      "3": { "content": "$3", "example": "37.7 GB" }
+    }
+  },
+  "usageResetSuffix": {
+    "message": " · resets $1",
+    "description": "Appended to the usage summary when a reset time is known. $1 is the reset time.",
+    "placeholders": {
+      "1": {
+        "content": "$1",
+        "example": "2026-01-01 00:00 UTC"
+      }
+    }
+  },
+  "confirmRemoveLocal": {
+    "message": "Delete the local component?\n\nThe extension stays, but the VPN will not work until the local component is installed again.",
+    "description": "Confirmation dialog before deleting the local component."
+  },
+  "noticeRemovingLocal": {
+    "message": "The local component is being deleted.",
+    "description": "Notice shown while the local component is removed."
+  },
+  "confirmFullUninstall": {
+    "message": "Fully uninstall Firefox IP Protection Bridge?\n\nThis turns off the VPN, deletes the local component and the credentials, and uninstalls the extension from Chrome.",
+    "description": "Confirmation dialog before a full uninstall."
+  }
+}

@@ -32,6 +32,9 @@ jobs:
       - name: Validate extension manifest
         run: python -m json.tool extension/manifest.json >/dev/null
 
+      - name: Check extension i18n catalogues
+        run: python extension/check-i18n-keys.py
+
       - name: Compile Python source
         run: >-
           python -m py_compile
@@ -40,6 +43,7 @@ jobs:
           vendor/firefox-ip-protection-pool/fcntl.py
           vendor/firefox-ip-protection-pool/import_credentials.py
           vendor/firefox-ip-protection-pool/ipp_pool.py
+          vendor/firefox-ip-protection-pool/login_and_bootstrap.py
           vendor/firefox-ip-protection-pool/refresh_state.py
           vendor/firefox-ip-protection-pool/refresh_tokens.py
           vendor/firefox-ip-protection-pool/renewal_credentials.py

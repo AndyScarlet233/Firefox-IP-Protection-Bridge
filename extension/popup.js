@@ -33,6 +33,19 @@ const confirmRuleImport = $("confirmRuleImport");
 const ruleImportPanel = $("ruleImportPanel");
 const ruleImportText = $("ruleImportText");
 const importFirefox = $("importFirefox");
+const bootstrapLogin = $("bootstrapLogin");
+const bootstrapProgress = $("bootstrapProgress");
+const bootstrapForm = $("bootstrapForm");
+const bootstrapEmail = $("bootstrapEmail");
+const bootstrapPassword = $("bootstrapPassword");
+const bootstrapStart = $("bootstrapStart");
+const bootstrapFormCancel = $("bootstrapFormCancel");
+const bootstrapChallenge = $("bootstrapChallenge");
+const bootstrapChallengeHint = $("bootstrapChallengeHint");
+const bootstrapCaptchaImg = $("bootstrapCaptchaImg");
+const bootstrapCodeInput = $("bootstrapCodeInput");
+const bootstrapCaptchaInput = $("bootstrapCaptchaInput");
+const bootstrapChallengeSubmit = $("bootstrapChallengeSubmit");
 const usageButton = $("usage");
 const usageText = $("usageText");
 const installPath = $("installPath");
@@ -49,6 +62,53 @@ const regionShieldDetail = $("regionShieldDetail");
 const regionProfileText = $("regionProfileText");
 const regionPageDiagText = $("regionPageDiagText");
 
+// ---------------------------------------------------------------------------
+// Localization. Every user-visible string in this file goes through t(); the
+// English catalogue in _locales/en is the default locale, so a missing key
+// falls back to the key itself instead of rendering an empty label.
+// ---------------------------------------------------------------------------
+function uiLanguage() {
+  try { return String(chrome?.i18n?.getUILanguage?.() || "en"); }
+  catch (_) { return "en"; }
+}
+
+function t(key, ...substitutions) {
+  try {
+    const text = chrome?.i18n?.getMessage?.(key, substitutions.map((value) => String(value)));
+    if (typeof text === "string" && text) return text;
+  } catch (_) {}
+  return key;
+}
+
+const ENGLISH_UI = /^en\b/i.test(uiLanguage());
+
+// popup.html ships lang="en" (the default locale); correct it to whatever
+// locale Chrome actually resolved, so hyphenation, font fallback and screen
+// readers follow the visible language.
+try { document.documentElement.lang = uiLanguage().replace(/_/g, "-"); } catch (_) {}
+
+// Chrome substitutes __MSG_*__ in manifest.json and CSS only - NOT in extension
+// HTML pages - so popup.html carries data-i18n* attributes and this fills them
+// in before the first render. Without it the raw attribute names would be
+// visible on every static label.
+function applyStaticI18n() {
+  const fill = (selector, attribute, apply) => {
+    for (const el of document.querySelectorAll(selector)) {
+      const key = el.getAttribute(attribute);
+      if (!key) continue;
+      const text = t(key);
+      if (text) apply(el, text);
+    }
+  };
+  fill("[data-i18n]", "data-i18n", (el, text) => { el.textContent = text; });
+  fill("[data-i18n-placeholder]", "data-i18n-placeholder", (el, text) => { el.placeholder = text; });
+  fill("[data-i18n-title]", "data-i18n-title", (el, text) => { el.title = text; });
+  fill("[data-i18n-aria-label]", "data-i18n-aria-label", (el, text) => { el.setAttribute("aria-label", text); });
+  fill("[data-i18n-alt]", "data-i18n-alt", (el, text) => { el.alt = text; });
+}
+
+applyStaticI18n();
+
 let state = { enabled: false, autoConnect: false, webRtcLeakProtection: true, dnsPredictionProtection: true, regionShieldEnabled: true, resolvedCountry: "", country: "REC", proxyMode: "allowlist", allowlist: [], bypassSites: [] };
 let privacyStatus = null;
 let regionStatus = null;
@@ -57,7 +117,14 @@ let activeDomain = "";
 let busy = false;
 let connectionTransition = "";
 let availableLocations = [];
+let bootstrapPollActive = false;
+let bootstrapChallengeNeed = null;
 
+// Country names are the one list that cannot live in messages.json: the same
+// code has to render as a Chinese name in a Chinese UI and as an English name
+// in an English UI. The Chinese table below is the interface's original
+// wording; an English UI is served by Intl.DisplayNames instead, which already
+// ships accurate names for every code the pool can hand back.
 const COUNTRY_NAMES_ZH = {
   AT: "奥地利", AU: "澳大利亚", BE: "比利时", BG: "保加利亚", CA: "加拿大",
   CH: "瑞士", CL: "智利", CO: "哥伦比亚", DE: "德国", DK: "丹麦",
@@ -66,6 +133,28 @@ const COUNTRY_NAMES_ZH = {
   NO: "挪威", NZ: "新西兰", PL: "波兰", PT: "葡萄牙", SE: "瑞典",
   SG: "新加坡", TH: "泰国", US: "美国", ZA: "南非"
 };
+
+let englishRegionNames = null;
+function englishRegionName(code) {
+  if (englishRegionNames === null) {
+    try {
+      englishRegionNames = new Intl.DisplayNames([uiLanguage() || "en"], { type: "region" });
+    } catch (_) {
+      englishRegionNames = false;
+    }
+  }
+  if (!englishRegionNames) return "";
+  try { return englishRegionNames.of(code) || ""; }
+  catch (_) { return ""; }
+}
+
+// `fallback` covers codes the pool reports that are in neither list.
+function countryNameFor(code, fallback = "") {
+  const key = String(code || "").toUpperCase();
+  if (!key) return fallback || "";
+  if (ENGLISH_UI) return englishRegionName(key) || fallback || key;
+  return COUNTRY_NAMES_ZH[key] || fallback || key;
+}
 
 function populateLocations(items = []) {
   availableLocations = Array.isArray(items) ? items : [];
@@ -77,16 +166,22 @@ function populateLocations(items = []) {
   country.innerHTML = "";
   const recommended = document.createElement("option");
   recommended.value = "REC";
-  recommended.textContent = "推荐（自动）";
+  recommended.textContent = t("locationRec");
   country.appendChild(recommended);
 
-  for (const code of [...allCodes].sort((a, b) => (COUNTRY_NAMES_ZH[a] || a).localeCompare(COUNTRY_NAMES_ZH[b] || b, "zh-CN"))) {
+  const collator = new Intl.Collator(uiLanguage() || undefined);
+  const sortedCodes = [...allCodes].sort((a, b) => {
+    const infoA = availableLocations.find(x => String(x.code || "").toUpperCase() === a) || {};
+    const infoB = availableLocations.find(x => String(x.code || "").toUpperCase() === b) || {};
+    return collator.compare(countryNameFor(a, infoA.name), countryNameFor(b, infoB.name));
+  });
+  for (const code of sortedCodes) {
     const info = availableLocations.find(x => String(x.code || "").toUpperCase() === code) || {};
     const option = document.createElement("option");
     option.value = code;
     option.disabled = !availableCodes.has(code);
-    const name = COUNTRY_NAMES_ZH[code] || info.name || code;
-    option.textContent = option.disabled ? `${name}（不可用）` : name;
+    const name = countryNameFor(code, info.name);
+    option.textContent = option.disabled ? t("countryUnavailable", name) : name;
     country.appendChild(option);
   }
 
@@ -105,10 +200,10 @@ async function send(message) {
     // hard failure would surface a bogus error and leave the popup unusable.
     await sleepMs(400);
     try { response = await chrome.runtime.sendMessage(message); }
-    catch (_) { throw new Error("后台服务未响应，请重新加载扩展后再试。"); }
+    catch (_) { throw new Error(t("errBackgroundNoResponse")); }
   }
-  if (!response) throw new Error("后台服务没有返回结果。");
-  if (response.ok === false) throw new Error(response.error || "操作失败");
+  if (!response) throw new Error(t("errBackgroundNoResult"));
+  if (response.ok === false) throw new Error(response.error || t("errOperationFailed"));
   return response;
 }
 
@@ -117,32 +212,33 @@ function translateUiError(message = "") {
   const text = String(message || "").trim();
   if (!text) return "";
   const known = [
-    [/Specified native messaging host not found\.?/i, "未找到本地桥接程序。请运行 INSTALL-OR-REPAIR.cmd 修复本地桥接；修复后扩展目录可以移动或改名。"],
-    [/Error when communicating with the native messaging host\.?/i, "与本地桥接程序通信失败。请确认已安装 runtime\\vpn_bridge_host.exe，并运行 INSTALL-OR-REPAIR.cmd 修复后重启浏览器。"],
-    [/Native host has exited\.?/i, "本地桥接程序已退出。请重试，或运行 INSTALL-OR-REPAIR.cmd 修复本地桥接。"],
-    [/Access to the specified native messaging host is forbidden\.?/i, "Chrome 无权访问本地桥接程序。请确认扩展 ID 与安装脚本一致。"],
-    [/Native bridge returned no response/i, "本地桥接程序没有返回结果。"],
-    [/Native bridge timeout while running (.+)/i, (_, cmd) => `本地桥接程序执行 ${cmd} 时超时。`],
-    [/Native bridge disconnected/i, "本地桥接程序已断开连接。"],
-    [/Chrome proxy is controlled by another extension or policy\.?/i, "Chrome 代理当前被其他扩展或管理员策略控制。"],
-    [/Unknown extension command/i, "扩展收到了未知命令。"],
-    [/no listeners started/i, "所选地区当前没有可用节点，请换一个地区。"],
-    [/exported 0 nodes/i, "所选地区当前没有可用节点，请换一个地区。"],
-    [/代理进程提前退出.*no listeners started/i, "所选地区当前没有可用节点，请换一个地区。"],
-    [/missing FxA access token for Guardian usage query/i, "检测到旧版后台仍在运行。请运行 1.0.0 的 INSTALL-OR-REPAIR.cmd，然后在扩展管理页重新加载本扩展。"],
-    [/missing Firefox renewal credentials for Guardian usage query/i, "未找到可续期的 Firefox 登录状态。请先点击“从 Firefox 导入登录状态”，然后再查询流量。"],
-    [/Firefox Account session requires re-authentication for Guardian usage query/i, "Firefox 账户登录状态已失效，请在 Firefox 中重新登录后再次导入。"],
-    [/Firefox Account OAuth usage query was rate-limited/i, "Mozilla 暂时限制了账户查询频率，请稍后再试。"],
-    [/temporary Firefox Account\/Guardian usage query failure/i, "Mozilla 流量查询暂时失败，请稍后重试。"],
-    [/Guardian usage request failed with HTTP 403/i, "当前 Mozilla 账户没有可用的 Firefox IP 保护资格。"],
-    [/Guardian usage request failed with HTTP 401/i, "Firefox 账户授权已失效，请重新导入登录状态。"],
-    [/HTTP 451|service_restricted|service is restricted/i, "Mozilla 拒绝了当前网络出口的请求（HTTP 451，与账户无关）。通常是出口地区暂时受限：请稍后重试；隧道建立后凭据续期会自动改走隧道出口。如反复出现，可将可用的 HTTP 代理写入 runtime 的 tokens/refresh_proxy.txt。"],
-    [/automatic renewal is paused \(service_restricted\)/i, "当前网络出口暂时被 Mozilla 拒绝（HTTP 451），请稍后重试；这不是账户问题。"]
+    [/Specified native messaging host not found\.?/i, t("errNativeHostNotFound")],
+    [/Error when communicating with the native messaging host\.?/i, t("errNativeHostCommunicate")],
+    [/Native host has exited\.?/i, t("errNativeHostExited")],
+    [/Access to the specified native messaging host is forbidden\.?/i, t("errNativeHostForbidden")],
+    [/Native bridge returned no response/i, t("errNativeNoResponse")],
+    [/Native bridge timeout while running (.+)/i, (_, cmd) => t("errNativeTimeout", cmd)],
+    [/Native bridge disconnected/i, t("errNativeDisconnected")],
+    [/Chrome proxy is controlled by another extension or policy\.?/i, t("errProxyControlledPopup")],
+    [/Unknown extension command/i, t("errUnknownCommand")],
+    [/no listeners started/i, t("errNoNodes")],
+    [/exported 0 nodes/i, t("errNoNodes")],
+    [/代理进程提前退出.*no listeners started/i, t("errNoNodes")],
+    [/missing FxA access token for Guardian usage query/i, t("errOutdatedBackend")],
+    [/missing Firefox renewal credentials for Guardian usage query/i, t("errMissingRenewalCredentials")],
+    [/Firefox Account session requires re-authentication for Guardian usage query/i, t("errAccountReauth")],
+    [/Firefox Account OAuth usage query was rate-limited/i, t("errUsageRateLimited")],
+    [/temporary Firefox Account\/Guardian usage query failure/i, t("errUsageTemporary")],
+    [/Guardian usage request failed with HTTP 403/i, t("errUsage403")],
+    [/Guardian usage request failed with HTTP 401/i, t("errUsage401")],
+    [/HTTP 451|service_restricted|service is restricted/i, t("errHttp451")],
+    [/automatic renewal is paused \(service_restricted\)/i, t("errRenewalPaused")]
   ];
   for (const [pattern, replacement] of known) {
     const match = text.match(pattern);
     if (match) return typeof replacement === 'function' ? replacement(...match) : replacement;
   }
+  if (ENGLISH_UI) return text;
   return text
     .replace(/\bNative bridge\b/g, "本地桥接程序")
     .replace(/\bhelper\b/gi, "桥接程序")
@@ -157,7 +253,7 @@ function showNotice(text = "", kind = "") {
 
 function formatQuotaBytes(value) {
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) return "未知";
+  if (!Number.isFinite(amount) || amount < 0) return t("errGenericUnknown");
   if (amount >= 1e9) return `${(amount / 1e9).toFixed(2)} GB`;
   if (amount >= 1e6) return `${(amount / 1e6).toFixed(1)} MB`;
   if (amount >= 1e3) return `${(amount / 1e3).toFixed(1)} KB`;
@@ -166,23 +262,23 @@ function formatQuotaBytes(value) {
 
 function formatQuotaReset(value) {
   const raw = String(value || "").trim();
-  if (!raw) return "未知";
+  if (!raw) return t("errGenericUnknown");
   return raw.replace(/Z$/, " UTC").replace("T", " ");
 }
 
 function formatUsageText(value) {
   const raw = String(value || "").trim();
-  if (!raw) return "未返回可读的用量信息。";
+  if (!raw) return t("errUnreadableUsage");
   try {
     const usage = JSON.parse(raw);
     if (usage && typeof usage === "object") {
-      if (usage.unlimited === true) return "本月流量：不限量";
+      if (usage.unlimited === true) return t("usageUnlimited");
       const limit = Number(usage.limit);
       const remaining = Number(usage.remaining);
       if (Number.isFinite(limit) && Number.isFinite(remaining) && limit >= 0 && remaining >= 0) {
         const used = Math.max(0, limit - remaining);
-        let text = `套餐 ${formatQuotaBytes(limit)} · 已使用 ${formatQuotaBytes(used)} · 剩余 ${formatQuotaBytes(remaining)}`;
-        if (usage.reset) text += ` · 重置 ${formatQuotaReset(usage.reset)}`;
+        let text = t("usagePlan", formatQuotaBytes(limit), formatQuotaBytes(used), formatQuotaBytes(remaining));
+        if (usage.reset) text += t("usageResetSuffix", formatQuotaReset(usage.reset));
         return text;
       }
     }
@@ -192,14 +288,26 @@ function formatUsageText(value) {
 
 function setBusy(value) {
   busy = value;
-  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, openFolder, removeLocal, fullUninstall, copyRules, toggleRuleImport, confirmRuleImport, copyFromBox, clearRuleImport, ruleImportText]) {
+  for (const el of [power, country, siteToggle, autoConnectToggle, webRtcLeakToggle, dnsPredictionToggle, regionShieldToggle, modeAllowlist, modeBlacklist, domainInput, addDomain, importFirefox, bootstrapLogin, openFolder, removeLocal, fullUninstall, copyRules, toggleRuleImport, confirmRuleImport, copyFromBox, clearRuleImport, ruleImportText, bootstrapEmail, bootstrapPassword, bootstrapStart, bootstrapFormCancel, bootstrapCodeInput, bootstrapCaptchaInput, bootstrapChallengeSubmit]) {
     if (el) el.disabled = value;
   }
 }
 
+// The "(unavailable)" marker is appended by populateLocations(), so recovering
+// the bare country name means removing exactly that localized suffix.
+function unavailableSuffix() {
+  const marker = "\u0000";
+  const sample = t("countryUnavailable", marker);
+  const at = sample.indexOf(marker);
+  return at < 0 ? "" : sample.slice(at + marker.length);
+}
+
 function countryName() {
   const selected = country.options[country.selectedIndex];
-  return selected?.text?.replace("（不可用）", "") || (country.value === "REC" ? "推荐（自动）" : COUNTRY_NAMES_ZH[country.value] || country.value);
+  const suffix = unavailableSuffix();
+  let label = String(selected?.text || "");
+  if (suffix && label.endsWith(suffix)) label = label.slice(0, -suffix.length);
+  return label || (country.value === "REC" ? t("locationRec") : countryNameFor(country.value));
 }
 
 function managedList() {
@@ -234,38 +342,41 @@ function renderMain() {
   connectionCard.classList.toggle("off", !state.enabled && !pending);
   connectionCard.classList.toggle("pending", pending);
   headline.textContent = loading
-    ? "正在读取状态…"
+    ? t("statusReading")
     : connecting
-      ? "正在连接…"
+      ? t("statusConnecting")
       : switching
-        ? "正在切换位置…"
+        ? t("statusSwitching")
         : disconnecting
-          ? "正在关闭…"
-          : (state.enabled ? "VPN 已开启" : "VPN 已关闭");
+          ? t("statusDisconnecting")
+          : (state.enabled ? t("headlineOn") : t("headlineOff"));
   power.textContent = loading
-    ? "正在读取…"
+    ? t("powerReading")
     : connecting
-      ? "正在连接…"
+      ? t("powerConnecting")
       : switching
-        ? "正在切换…"
+        ? t("powerSwitching")
         : disconnecting
-          ? "正在关闭…"
-          : (state.enabled ? "关闭 VPN" : "开启 VPN");
+          ? t("powerDisconnecting")
+          : (state.enabled ? t("powerOff") : t("powerOn"));
   if (statusMark) statusMark.textContent = pending ? "…" : "✓";
-  locationText.textContent = `位置：${countryName()}`;
+  locationText.textContent = t("locationPrefix", countryName());
   modeHint.textContent = pending
     ? (loading
-      ? "正在检查本地代理…"
-      : (disconnecting ? "正在恢复浏览器直连…" : "正在验证本地代理…"))
+      ? t("modeHintChecking")
+      : (disconnecting ? t("modeHintRestoring") : t("modeHintVerifying")))
     : (state.proxyMode === "allowlist"
-      ? `白名单 · ${state.allowlist.length} 个网站`
-      : (state.bypassSites.length ? `黑名单 · ${state.bypassSites.length} 个直连网站` : "黑名单 · 默认全走 VPN"));
-  settingsSummary.textContent = state.proxyMode === "allowlist" ? "白名单" : "黑名单";
+      ? t("modeHintAllowlistCount", state.allowlist.length)
+      : (state.bypassSites.length ? t("modeHintBlocklistCount", state.bypassSites.length) : t("modeHintBlocklistAll")));
+  settingsSummary.textContent = state.proxyMode === "allowlist" ? t("modeAllowlist") : t("modeBlacklist");
   const showSiteControls = Boolean(state.enabled && activeDomain && !pending);
   siteRow.hidden = !showSiteControls;
   siteToggle.checked = showSiteControls && siteUsesVpn();
   siteRow?.classList.toggle("vpn-on-site", Boolean(showSiteControls && siteToggle.checked));
   siteToggle.disabled = busy || !showSiteControls;
+  // setBusy re-enables everything it gated, so the unavailable/disabled state
+  // has to be re-asserted on every render or it would silently be lost.
+  applyBootstrapAvailability();
   renderCredentialFreshness();
 }
 
@@ -281,23 +392,23 @@ function renderCredentialFreshness() {
 
   const failures = Number(info.failures || 0);
   const ageHours = typeof info.lastSuccessAgoHours === "number" ? info.lastSuccessAgoHours : null;
-  const refreshHint = "打开一次 Firefox 或重新导入即可刷新。";
+  const refreshHint = t("credRefreshHint");
 
   if (failures > 0) {
-    credentialFreshness.textContent = `最近续期失败 ${failures} 次；${refreshHint}`;
+    credentialFreshness.textContent = t("credRenewalFailures", failures, refreshHint);
     credentialFreshness.classList.add("bad");
     credentialFreshness.hidden = false;
     return;
   }
   if (ageHours === null) { credentialFreshness.hidden = true; return; }
   if (ageHours >= 24 * 14) {
-    credentialFreshness.textContent = `凭据已 ${Math.round(ageHours / 24)} 天未刷新；${refreshHint}`;
+    credentialFreshness.textContent = t("credStaleDays", Math.round(ageHours / 24), refreshHint);
     credentialFreshness.classList.add("warn");
   } else if (ageHours >= 24 * 3) {
-    credentialFreshness.textContent = `凭据已 ${Math.round(ageHours / 24)} 天未刷新。`;
+    credentialFreshness.textContent = t("credStaleDaysShort", Math.round(ageHours / 24));
     credentialFreshness.classList.add("warn");
   } else {
-    credentialFreshness.textContent = `凭据 ${Math.max(1, Math.round(ageHours))} 小时前已验证。`;
+    credentialFreshness.textContent = t("credVerifiedHours", Math.max(1, Math.round(ageHours)));
   }
   credentialFreshness.hidden = false;
 }
@@ -311,55 +422,55 @@ function renderSettings() {
 
   const rtc = privacyStatus?.webRtc;
   if (state.webRtcLeakProtection && rtc?.supported && rtc.effective === "disable_non_proxied_udp") {
-    webRtcPrivacyDetail.textContent = "已阻止 WebRTC 使用非代理 UDP；VPN 关闭时也继续生效。";
+    webRtcPrivacyDetail.textContent = t("webrtcActive");
   } else if (state.webRtcLeakProtection && rtc && (rtc.levelOfControl === "controlled_by_other_extensions" || rtc.levelOfControl === "not_controllable")) {
-    webRtcPrivacyDetail.textContent = "当前未能接管此设置：它被其他扩展或管理员策略控制。";
+    webRtcPrivacyDetail.textContent = t("webrtcBlocked");
   } else if (!state.webRtcLeakProtection) {
-    webRtcPrivacyDetail.textContent = "已关闭；Chrome 使用原本的 WebRTC IP 策略。";
+    webRtcPrivacyDetail.textContent = t("webrtcOff");
   } else {
-    webRtcPrivacyDetail.textContent = "阻止 WebRTC 绕过代理暴露真实 IP；VPN 关闭时也可以继续保护。";
+    webRtcPrivacyDetail.textContent = t("webrtcDetailDefault");
   }
 
   const dns = privacyStatus?.dnsPrediction;
   if (!state.dnsPredictionProtection) {
-    dnsPrivacyDetail.textContent = "已关闭；所有网站使用 Chrome 原本的 DNS 预解析。";
+    dnsPrivacyDetail.textContent = t("dnsOff");
   } else if (!state.enabled) {
-    dnsPrivacyDetail.textContent = "待命；VPN 开启后只保护实际走 VPN 的页面，直连网站不受影响。";
+    dnsPrivacyDetail.textContent = t("dnsStandby");
   } else if (dns?.supported && dns?.active) {
-    dnsPrivacyDetail.textContent = "已按路由生效：VPN 页面关闭 DNS 预解析，直连页面保留原生预解析/预连接。";
+    dnsPrivacyDetail.textContent = t("dnsRouteScoped");
   } else if (state.proxyMode === "allowlist" && !state.allowlist.length) {
-    dnsPrivacyDetail.textContent = "白名单为空；当前没有网页走 VPN，因此 DNS 防护无需生效。";
+    dnsPrivacyDetail.textContent = t("dnsEmptyAllowlist");
   } else if (dns && dns.supported === false) {
-    dnsPrivacyDetail.textContent = "当前 Chrome 不支持按路由修改 DNS 预解析控制。";
+    dnsPrivacyDetail.textContent = t("dnsUnsupported");
   } else {
-    dnsPrivacyDetail.textContent = "正在同步按路由 DNS 防护规则。";
+    dnsPrivacyDetail.textContent = t("dnsSyncing");
   }
   const rp = regionStatus?.profile;
   if (!state.regionShieldEnabled) {
-    regionShieldDetail.textContent = "已关闭；网站会看到 Chrome 原本的语言、时区、字体与定位线索。";
+    regionShieldDetail.textContent = t("regionOff");
   } else if (!state.enabled) {
-    regionShieldDetail.textContent = "待命；VPN 连接后只对实际走 VPN 的网页生效。";
+    regionShieldDetail.textContent = t("regionStandby");
   } else if (regionStatus?.active) {
-    regionShieldDetail.textContent = "正在对实际走 VPN 的网页减少语言、时区、定位与中文字体线索。";
+    regionShieldDetail.textContent = t("regionActive");
   } else {
-    regionShieldDetail.textContent = "已开启；正在等待 VPN 连接。";
+    regionShieldDetail.textContent = t("regionWaiting");
   }
   regionProfileText.textContent = rp
-    ? `当前配置：${rp.country} · ${rp.locale} · ${rp.timeZone}。已打开网页会自动同步。`
-    : "当前配置将在 VPN 连接后自动生成。";
+    ? t("regionProfileCurrent", countryNameFor(rp.country, rp.country), rp.locale, rp.timeZone)
+    : t("regionProfilePending");
   modeAllowlist.classList.toggle("active", allow);
   modeBlacklist.classList.toggle("active", !allow);
   modeDescription.textContent = allow
-    ? "只有白名单里的域名及其站点族走 VPN；其余网站直接连接。"
-    : "除黑名单中的直连网站外，其余网站默认走 VPN。";
-  listTitle.textContent = allow ? "使用 VPN 的白名单" : "直接连接的黑名单";
+    ? t("modeDescAllowlist")
+    : t("modeDescBlocklist");
+  listTitle.textContent = allow ? t("listTitleAllowlist") : t("listTitleBlocklist");
   const domains = managedList();
   siteCount.textContent = String(domains.length);
   domainList.innerHTML = "";
   if (!domains.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = allow ? "白名单为空，当前不会有网站走 VPN。" : "黑名单为空，当前所有网站都会走 VPN。";
+    empty.textContent = allow ? t("listEmptyAllowlist") : t("listEmptyBlocklist");
     domainList.appendChild(empty);
   } else {
     for (const domain of domains) {
@@ -370,7 +481,7 @@ function renderSettings() {
       label.title = domain;
       const remove = document.createElement("button");
       remove.textContent = "×";
-      remove.title = `删除 ${domain}`;
+      remove.title = t("removeDomainTitle", domain);
       remove.addEventListener("click", () => removeDomain(domain));
       row.append(label, remove);
       domainList.appendChild(row);
@@ -389,24 +500,25 @@ async function getActiveDomain() {
 async function refreshRegionPageDiagnostics() {
   if (!regionPageDiagText) return;
   if (!state.regionShieldEnabled) {
-    regionPageDiagText.textContent = "当前网页实测：区域隐私保护已关闭。";
+    regionPageDiagText.textContent = t("diagRegionOff");
     return;
   }
   if (!state.enabled) {
-    regionPageDiagText.textContent = "当前网页实测：VPN 未连接，区域保护待命。";
+    regionPageDiagText.textContent = t("diagVpnOff");
     return;
   }
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url || !/^https?:/i.test(tab.url)) {
-      regionPageDiagText.textContent = "当前网页实测：此页面不支持检测。";
+      regionPageDiagText.textContent = t("diagUnsupportedPage");
       return;
     }
+    const probeText = t("diagFontProbeText");
     const [{ result } = {}] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       world: "MAIN",
-      func: () => {
-        const test = "中文字体检测ABCabc012";
+      func: (probe) => {
+        const test = probe;
         let fontLeak = null;
         try {
           const canvas = document.createElement("canvas");
@@ -427,18 +539,20 @@ async function refreshRegionPageDiagnostics() {
           offset: new Date().getTimezoneOffset(),
           fontLeak
         };
-      }
+      },
+      args: [probeText]
     });
-    if (!result) throw new Error("没有返回结果");
+    if (!result) throw new Error(t("diagNoResult"));
     const expected = regionStatus?.profile;
     const langOk = !expected || String(result.language).toLowerCase() === String(expected.locale).toLowerCase();
     const tzOk = !expected || result.timeZone === expected.timeZone;
     const fontOk = result.fontLeak !== true;
     const ok = langOk && tzOk && fontOk;
-    const fontText = result.fontLeak == null ? "字体未知" : (result.fontLeak ? "中文字体仍可探测" : "中文字体已遮罩");
-    regionPageDiagText.textContent = `当前网页实测：${result.language || "?"} · ${result.timeZone || "?"} · ${fontText}${ok ? " ✓" : "（未完全生效，请刷新网页）"}`;
+    const fontText = result.fontLeak == null ? t("diagFontUnknown") : (result.fontLeak ? t("diagFontLeak") : t("diagFontMasked"));
+    const suffix = ok ? t("diagOkSuffix") : t("diagPartialSuffix");
+    regionPageDiagText.textContent = t("diagLine", result.language || "?", result.timeZone || "?", fontText, suffix);
   } catch (_) {
-    regionPageDiagText.textContent = "当前网页实测：尚未载入保护脚本，请刷新此网页。";
+    regionPageDiagText.textContent = t("diagNotInjected");
   }
 }
 
@@ -464,7 +578,7 @@ async function refreshStatus() {
   setBusy(true);
   connectionTransition = "loading";
   renderMain();
-  showNotice("正在读取 VPN 状态…");
+  showNotice(t("noticeReadingStatus"));
   // Status and locations are independent requests; run them concurrently so
   // the popup is not serialized behind two native-messaging round trips.
   // A hard deadline matters: setBusy(true) disables every control, so a promise
@@ -474,7 +588,7 @@ async function refreshStatus() {
     (error) => ({ ok: false, error })
   );
   const deadline = new Promise((resolve) => setTimeout(
-    () => resolve({ ok: false, error: new Error("可用地区列表加载超时。") }), 12000
+    () => resolve({ ok: false, error: new Error(t("errLocationListTimeout")) }), 12000
   ));
   try {
     const response = await send({ type: "status" });
@@ -489,11 +603,11 @@ async function refreshStatus() {
       populateLocations(locationResult.response.locations || []);
     } else {
       populateLocations([]);
-      locationWarning = `可用地区列表暂时无法刷新：${translateUiError(locationResult.error.message)}`;
+      locationWarning = t("warnLocationListStale", translateUiError(locationResult.error.message));
     }
     country.value = [...country.options].some(o => o.value === (state.country || "REC")) ? (state.country || "REC") : "REC";
     activeDomain = await getActiveDomain();
-    currentSite.textContent = activeDomain || "当前页面无法单独设置（仅支持 http/https 网页）";
+    currentSite.textContent = activeDomain || t("siteNotConfigurable");
     activeSiteUsesVpn = null;
     if (activeDomain) {
       try {
@@ -501,24 +615,33 @@ async function refreshStatus() {
         activeSiteUsesVpn = Boolean(route?.usesVpn);
       } catch (_) { activeSiteUsesVpn = null; }
     }
-    installPath.textContent = helper.installRoot || "未返回安装位置";
+    installPath.textContent = helper.installRoot || t("installPathUnknown");
     installPath.title = helper.installRoot || "";
-    credentialStatus.textContent = helper.credentials ? "已导入，可自动续期访问凭据" : (helper.available ? "尚未导入 Firefox 登录状态" : "本地桥接程序不可用");
+    credentialStatus.textContent = helper.credentials ? t("credStatusImported") : (helper.available ? t("credStatusNotSignedIn") : t("credStatusBridgeUnavailable"));
     // While the background still owes an auto-connect for this session, the
     // last error is expected to be transient. Say what is happening instead of
     // surfacing a red failure the user cannot act on.
     const autoConnectRetrying = !state.enabled && state.autoConnect && state.autoConnectPending;
-    if (autoConnectRetrying) showNotice("自动连接尚未完成，正在后台自动重试；也可以点上方按钮立即连接。");
+    if (autoConnectRetrying) showNotice(t("noticeAutoConnectRetrying"));
     else if (response.helperError) showNotice(response.helperError, "error");
     else if (state.lastError) showNotice(state.lastError, "error");
     else if (locationWarning) showNotice(locationWarning, "error");
     else showNotice("");
     renderMain();
     renderSettings();
+    applyBootstrapAvailability();
+    // Reopening the popup must not orphan a login flow the host is still
+    // running: resume mirroring its progress instead of showing a dead UI.
+    if (helper.bootstrap?.running === true && !bootstrapPollActive) {
+      showBootstrapProgress(t("noticeWaitingBrowserLogin"));
+      // A reopened popup must re-offer whatever the host still waits for.
+      renderBootstrapChallenge(helper.bootstrap);
+      pollBootstrapStatus();
+    }
     await refreshRegionPageDiagnostics();
   } catch (error) {
     showNotice(error.message, "error");
-    credentialStatus.textContent = "未找到本地桥接程序，请重新运行安装或更新脚本。";
+    credentialStatus.textContent = t("credStatusBridgeMissing");
   } finally {
     connectionTransition = "";
     setBusy(false);
@@ -537,7 +660,7 @@ power.addEventListener("click", async () => {
   const next = !state.enabled;
   connectionTransition = next ? "connecting" : "disconnecting";
   renderMain();
-  showNotice(next ? "正在连接 Firefox IP 保护服务…" : "正在断开连接…");
+  showNotice(next ? t("noticeConnectingService") : t("noticeDisconnecting"));
   try {
     const response = await send({ type: "toggle", enabled: next, country: country.value });
     // Verify both connect and disconnect. A successful command acknowledgement
@@ -547,13 +670,13 @@ power.addEventListener("click", async () => {
     if (verified.health?.healthy !== true || Boolean(state.enabled) !== next ||
         (next && helper.running !== true)) {
       throw new Error(verified.helperError || (next
-        ? "本地 SOCKS5 代理未能保持运行，已恢复浏览器直连。"
-        : "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。"));
+        ? t("errSocksNotKeptAlive")
+        : t("errDirectNotConfirmedReload")));
     }
     if (next && response?.resolvedCountry && country.value === "REC") {
-      showNotice(`VPN 已连接，推荐位置当前使用 ${COUNTRY_NAMES_ZH[response.resolvedCountry] || response.resolvedCountry}。`, "good");
+      showNotice(t("noticeConnectedRecommended", countryNameFor(response.resolvedCountry, response.resolvedCountry)), "good");
     }
-    if (!(next && response?.resolvedCountry && country.value === "REC")) showNotice(next ? "VPN 已连接。" : "VPN 已关闭。", "good");
+    if (!(next && response?.resolvedCountry && country.value === "REC")) showNotice(next ? t("noticeConnected") : t("noticeDisconnected"), "good");
   } catch (error) {
     showNotice(error.message, "error");
     state.enabled = false;
@@ -584,10 +707,10 @@ country.addEventListener("change", async () => {
     await send({ type: "country", country: selected });
     const verified = adoptStatusResponse(await send({ type: "status" }));
     if (verified.health?.healthy !== true || (wasEnabled && (!state.enabled || helper.running !== true))) {
-      throw new Error(verified.helperError || "位置切换后 VPN 状态未能通过检查。");
+      throw new Error(verified.helperError || t("errCountrySwitchUnverified"));
     }
     state.country = selected;
-    showNotice(state.enabled ? "位置已切换。" : "位置已保存。", "good");
+    showNotice(state.enabled ? t("noticeCountrySwitched") : t("noticeCountrySaved"), "good");
   } catch (error) {
     showNotice(error.message, "error");
     await reconcileAfterCommandFailure();
@@ -611,8 +734,8 @@ siteToggle.addEventListener("change", async () => {
     } catch (_) { activeSiteUsesVpn = null; }
     showNotice(
       desired
-        ? `${activeDomain} 已改为走 VPN。已打开的页面请刷新后生效。`
-        : `${activeDomain} 已改为直连。已打开的页面请刷新后生效。`,
+        ? t("noticeSiteUsesVpn", activeDomain)
+        : t("noticeSiteDirect", activeDomain),
       "good"
     );
   } catch (error) {
@@ -628,7 +751,7 @@ async function changeMode(mode) {
   try {
     await send({ type: "proxyMode", mode });
     state.proxyMode = mode;
-    showNotice(mode === "allowlist" ? "已切换为白名单模式。" : "已切换为黑名单模式。", "good");
+    showNotice(mode === "allowlist" ? t("noticeModeAllowlist") : t("noticeModeBlocklist"), "good");
   } catch (error) {
     showNotice(error.message, "error");
     await reconcileAfterCommandFailure();
@@ -645,8 +768,8 @@ autoConnectToggle.addEventListener("change", async () => {
     const response = await send({ type: "autoConnect", enabled: desired });
     state.autoConnect = Boolean(response.autoConnect);
     showNotice(state.autoConnect
-      ? "已启用启动时自动连接；下次启动 Chrome 会先启动本地组件，连接就绪后再启用 VPN。"
-      : "已关闭启动时自动连接。", "good");
+      ? t("noticeAutoConnectOn")
+      : t("noticeAutoConnectOff"), "good");
   } catch (error) {
     autoConnectToggle.checked = Boolean(state.autoConnect);
     showNotice(error.message, "error");
@@ -665,12 +788,12 @@ async function changePrivacyOption(option, desired) {
     privacyStatus = response.privacy || privacyStatus;
     if (option === "webRtcLeakProtection") {
       showNotice(state.webRtcLeakProtection
-        ? "WebRTC 防泄漏已开启；即使 VPN 关闭也会继续保护。"
-        : "WebRTC 防泄漏已关闭，已恢复 Chrome 原本的 WebRTC 策略。", "good");
+        ? t("noticeWebrtcOn")
+        : t("noticeWebrtcOff"), "good");
     } else {
       showNotice(state.dnsPredictionProtection
-        ? (state.enabled ? "DNS 预解析防护已按 VPN 路由生效；直连网站不受影响。" : "DNS 预解析防护已开启，将在 VPN 连接时按路由生效。")
-        : "DNS 预解析防护已关闭；Chrome 保持原本的 DNS 预解析行为。", "good");
+        ? (state.enabled ? t("noticeDnsOnActive") : t("noticeDnsOnStandby"))
+        : t("noticeDnsOff"), "good");
     }
   } catch (error) {
     toggle.checked = Boolean(state[option]);
@@ -692,8 +815,8 @@ regionShieldToggle.addEventListener("change", async () => {
     state.regionShieldEnabled = Boolean(response.regionShieldEnabled);
     regionStatus = response.region || regionStatus;
     showNotice(state.regionShieldEnabled
-      ? "区域隐私保护已开启；VPN 连接后只对实际走 VPN 的网页生效。"
-      : "区域隐私保护已关闭。", "good");
+      ? t("noticeRegionOn")
+      : t("noticeRegionOff"), "good");
   } catch (error) {
     regionShieldToggle.checked = Boolean(state.regionShieldEnabled);
     showNotice(error.message, "error");
@@ -711,7 +834,7 @@ async function addManaged() {
     state.allowlist = response.allowlist || state.allowlist;
     state.bypassSites = response.bypassSites || state.bypassSites;
     domainInput.value = "";
-    showNotice("网站规则已添加。", "good");
+    showNotice(t("noticeRuleAdded"), "good");
   } catch (error) {
     showNotice(error.message, "error");
     await reconcileAfterCommandFailure();
@@ -741,7 +864,7 @@ async function putText(text, successMessage) {
     await navigator.clipboard.writeText(text);
     showNotice(successMessage, "good");
   } catch (_) {
-    showNotice("已生成内容，请手动复制文本框中的文字。", "error");
+    showNotice(t("noticeCopiedToBox"), "error");
   }
 }
 
@@ -751,12 +874,12 @@ copyRules.addEventListener("click", async () => {
     const response = await send({ type: "exportManagedDomains" });
     const domains = response.domains || [];
     if (!domains.length) {
-      showNotice(state.proxyMode === "allowlist" ? "白名单为空，没有可导出的内容。" : "黑名单为空，没有可导出的内容。", "error");
+      showNotice(state.proxyMode === "allowlist" ? t("noticeExportEmptyAllowlist") : t("noticeExportEmptyBlocklist"), "error");
       return;
     }
-    const kind = response.mode === "allowlist" ? "白名单（走 VPN）" : "黑名单（直连）";
-    const text = ["# 火狐 VPN " + kind, "# 共 " + domains.length + " 条", ...domains].join("\n");
-    await putText(text, `已复制 ${domains.length} 条规则。`);
+    const kind = response.mode === "allowlist" ? t("exportKindAllowlist") : t("exportKindBlocklist");
+    const text = [t("exportHeaderTitle", kind), t("exportHeaderCount", domains.length), ...domains].join("\n");
+    await putText(text, t("noticeCopiedRules", domains.length));
   } catch (error) {
     showNotice(error.message, "error");
   } finally { setBusy(false); }
@@ -764,12 +887,12 @@ copyRules.addEventListener("click", async () => {
 
 copyFromBox.addEventListener("click", async () => {
   const text = ruleImportText.value.trim();
-  if (!text) { showNotice("文本框是空的，没有可复制的内容。", "error"); return; }
+  if (!text) { showNotice(t("errBoxEmpty"), "error"); return; }
   try {
     await navigator.clipboard.writeText(text);
-    showNotice("已复制文本框内容。", "good");
+    showNotice(t("noticeBoxCopied"), "good");
   } catch (_) {
-    showNotice("无法访问剪贴板，请手动选中并复制。", "error");
+    showNotice(t("errClipboardUnavailable"), "error");
   }
 });
 
@@ -784,17 +907,17 @@ ruleImportText.addEventListener("keydown", (event) => {
 
 confirmRuleImport.addEventListener("click", async () => {
   const text = ruleImportText.value.trim();
-  if (!text) { showNotice("请先在文本框粘贴要导入的域名列表。", "error"); return; }
+  if (!text) { showNotice(t("errPasteRulesFirst"), "error"); return; }
   setBusy(true);
   try {
     const response = await send({ type: "importManagedDomains", text });
     state.allowlist = response.allowlist || [];
     state.bypassSites = response.bypassSites || [];
     ruleImportText.value = "";
-    const kind = response.mode === "allowlist" ? "白名单" : "黑名单";
+    const kind = response.mode === "allowlist" ? t("importKindAllowlist") : t("importKindBlocklist");
     showNotice(response.added > 0
-      ? `已合并 ${response.added} 条新规则，${kind}现有 ${response.total} 条。`
-      : `没有新规则，${kind}仍是 ${response.total} 条。`, "good");
+      ? t("noticeImportMerged", response.added, kind, response.total)
+      : t("noticeImportNothingNew", kind, response.total), "good");
   } catch (error) {
     showNotice(error.message, "error");
   } finally { setBusy(false); renderMain(); renderSettings(); }
@@ -806,7 +929,7 @@ async function removeDomain(domain) {
     const response = await send({ type: "removeManagedDomain", domain });
     state.allowlist = response.allowlist || [];
     state.bypassSites = response.bypassSites || [];
-    showNotice("网站规则已删除。", "good");
+    showNotice(t("noticeRuleRemoved"), "good");
   } catch (error) {
     showNotice(error.message, "error");
     await reconcileAfterCommandFailure();
@@ -824,19 +947,264 @@ infoButton.addEventListener("click", () => { toggleSettings(true); settingsPanel
 
 importFirefox.addEventListener("click", async () => {
   setBusy(true);
-  showNotice("正在从本机 Firefox 导入登录状态…");
+  showBootstrapMessage(t("noticeImportingFirefox"));
   try {
     const response = await send({ type: "importFirefox" });
-    credentialStatus.textContent = response.accountLabel || "已成功导入并验证";
+    credentialStatus.textContent = response.accountLabel || t("credStatusImportedVerified");
     helper.credentials = true;
-    showNotice("Firefox 登录状态已成功导入。", "good");
-  } catch (error) { showNotice(error.message, "error"); }
+    showBootstrapMessage(t("noticeFirefoxImported"), "ok");
+  } catch (error) { showBootstrapMessage(error.message, "bad"); }
   finally { setBusy(false); }
 });
 
+// Browser login is fire-and-poll: the host drives its own flow, the popup only
+// mirrors progress and collects email/password/captcha input in-page (a console
+// window garbles Chinese IME). No setBusy here on purpose — the user
+// must stay able to click the same button again to cancel.
+const BOOTSTRAP_STAGE_TEXT = {
+  starting: () => t("bootstrapStageStarting"),
+  browser: () => t("bootstrapStageBrowser"),
+  waiting: () => t("bootstrapStageWaiting"),
+  exchanging: () => t("bootstrapStageExchanging")
+};
+// Resolved lazily: the catalogue must be read after the popup document is
+// alive, and a stage the host adds later must not render an empty line.
+function bootstrapStageText(stage) {
+  const resolve = BOOTSTRAP_STAGE_TEXT[stage];
+  return typeof resolve === "function" ? resolve() : t("bootstrapWaitingLogin");
+}
+const BOOTSTRAP_POLL_INTERVAL_MS = 3000;
+// The emailed confirmation code can take several minutes to arrive, so the
+// popup must keep watching well past the browser/captcha phase.
+const BOOTSTRAP_POLL_LIMIT_MS = 15 * 60 * 1000;
+
+function setBootstrapButton(text) {
+  if (bootstrapLogin) bootstrapLogin.textContent = text;
+}
+
+function showBootstrapProgress(text, kind = "") {
+  if (!bootstrapProgress) return;
+  bootstrapProgress.textContent = text;
+  bootstrapProgress.className = `detail bootstrap-progress ${kind}`.trim();
+  bootstrapProgress.hidden = !text;
+}
+
+// The global #notice banner sits at the very top of the popup, which is
+// scrolled out of view once the user is looking at the settings block. Every
+// login-related message therefore also lands inline, directly under the form
+// the user is interacting with.
+function showBootstrapMessage(text, kind = "") {
+  showBootstrapProgress(text, kind);
+  if (text) showNotice(text, kind === "bad" ? "error" : "");
+}
+
+function finishBootstrapPolling() {
+  bootstrapPollActive = false;
+  setBootstrapButton(t("browserLoginButton"));
+  showBootstrapProgress("");
+  renderBootstrapChallenge(null);
+}
+
+async function pollBootstrapStatus() {
+  if (bootstrapPollActive) return;
+  bootstrapPollActive = true;
+  setBootstrapButton(t("bootstrapButtonSigningIn"));
+  const startedAt = Date.now();
+  while (bootstrapPollActive) {
+    try {
+      const response = await send({ type: "bootstrapStatus" });
+      if (!bootstrapPollActive) return;
+      const info = response.bootstrap || {};
+      const detail = String(info.detail || "").trim();
+      const stageText = bootstrapStageText(info.stage);
+      showBootstrapProgress(detail || stageText);
+      // Mirror whatever the host still waits for: the popup shows the code or
+      // captcha input only while the host actually asks for one.
+      renderBootstrapChallenge(info);
+      if (info.running === false) {
+        if (info.success === true) {
+          helper.credentials = true;
+          credentialStatus.textContent = info.accountLabel || t("credStatusSignedIn");
+          renderCredentialFreshness();
+          showBootstrapMessage(t("noticeLoginSuccess"), "ok");
+        } else {
+          showBootstrapMessage(detail || t("bootstrapIncomplete"), "bad");
+        }
+        finishBootstrapPolling();
+        return;
+      }
+    } catch (error) {
+      if (!bootstrapPollActive) return;
+      finishBootstrapPolling();
+      showBootstrapMessage(error.message, "bad");
+      return;
+    }
+    if (Date.now() - startedAt >= BOOTSTRAP_POLL_LIMIT_MS) {
+      // Hard stop: a stuck host flow must not poll the popup forever.
+      finishBootstrapPolling();
+      showBootstrapMessage(t("bootstrapTimeout"), "bad");
+      return;
+    }
+    await sleepMs(BOOTSTRAP_POLL_INTERVAL_MS);
+  }
+}
+
+// The host reports what it still waits for via need: null hides the area,
+// "email_code" shows the 6-digit input, "captcha" swaps in the JPEG it sent.
+function renderBootstrapChallenge(info) {
+  const need = (info && info.running === true && info.need) || null;
+  const previousNeed = bootstrapChallengeNeed;
+  bootstrapChallengeNeed = need;
+  if (!bootstrapChallenge) return;
+  if (!need) {
+    bootstrapChallenge.hidden = true;
+    bootstrapCodeInput.hidden = true;
+    bootstrapCaptchaInput.hidden = true;
+    bootstrapCaptchaImg.hidden = true;
+    return;
+  }
+  bootstrapChallenge.hidden = false;
+  const isCaptcha = need === "captcha";
+  const isTotp = need === "totp_code";
+  bootstrapChallengeHint.textContent = isCaptcha
+    ? t("bootstrapHintCaptcha")
+    : (isTotp ? t("bootstrapHintTotp") : t("bootstrapHintEmail"));
+  bootstrapCaptchaImg.hidden = !isCaptcha;
+  if (isCaptcha && typeof info.captchaB64 === "string" && info.captchaB64) {
+    bootstrapCaptchaImg.src = `data:image/jpeg;base64,${info.captchaB64}`;
+  }
+  bootstrapCodeInput.hidden = isCaptcha;
+  bootstrapCaptchaInput.hidden = !isCaptcha;
+  // A challenge appears below the fold of the settings panel, so without a
+  // notice and a scroll it looks like the flow silently stopped after the
+  // credentials were submitted. Only announce the transition, not every poll.
+  if (previousNeed !== need) {
+    showBootstrapMessage(isCaptcha
+      ? t("bootstrapNeedCaptcha")
+      : (isTotp ? t("bootstrapNeedTotp")
+                : t("bootstrapNeedEmail")));
+    try { bootstrapChallenge.scrollIntoView({ block: "nearest" }); } catch (_) {}
+    const target = isCaptcha ? bootstrapCaptchaInput : bootstrapCodeInput;
+    try { target.focus(); } catch (_) {}
+  }
+}
+
+async function submitBootstrapChallenge() {
+  const need = bootstrapChallengeNeed;
+  const input = need === "captcha" ? bootstrapCaptchaInput : bootstrapCodeInput;
+  const value = String(input?.value || "").trim();
+  if (!value) {
+    showBootstrapMessage(need === "captcha" ? t("bootstrapErrCaptchaEmpty") : t("bootstrapErrCodeEmpty"), "bad");
+    return;
+  }
+  if (bootstrapChallengeSubmit.disabled) return;
+  bootstrapChallengeSubmit.disabled = true;
+  try {
+    await send({ type: "bootstrapSubmit", value });
+    // Hide only on success so a rejected answer keeps the input for a retry.
+    showBootstrapProgress(t("bootstrapSubmitted"));
+    if (need === "captcha") bootstrapCaptchaInput.value = "";
+    else bootstrapCodeInput.value = "";
+    renderBootstrapChallenge(null);
+  } catch (error) {
+    showBootstrapMessage(error.message, "bad");
+  } finally {
+    bootstrapChallengeSubmit.disabled = false;
+  }
+}
+
+bootstrapChallengeSubmit.addEventListener("click", submitBootstrapChallenge);
+// Enter inside either challenge input submits, matching the button.
+for (const input of [bootstrapCodeInput, bootstrapCaptchaInput]) {
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); submitBootstrapChallenge(); }
+  });
+}
+
+bootstrapFormCancel.addEventListener("click", () => { bootstrapForm.hidden = true; });
+
+// Live feedback while typing: the user should never have to press the button to
+// discover that the address is not an address. Suppressed while a login flow is
+// running so it cannot overwrite real progress.
+for (const field of [bootstrapEmail, bootstrapPassword]) {
+  field.addEventListener("input", () => {
+    if (bootstrapPollActive) return;
+    const email = String(bootstrapEmail.value || "").trim();
+    const password = String(bootstrapPassword.value || "");
+    if (email && !email.includes("@")) {
+      showBootstrapProgress(t("bootstrapErrEmailAt"), "bad");
+      return;
+    }
+    if (email.includes("@") && !password) {
+      showBootstrapProgress(t("bootstrapErrPassword"), "bad");
+      return;
+    }
+    showBootstrapProgress("");
+  });
+}
+
+bootstrapStart.addEventListener("click", async () => {
+  const email = String(bootstrapEmail.value || "").trim();
+  const password = String(bootstrapPassword.value || "");
+  if (!email || !email.includes("@") || !password) {
+    showBootstrapMessage(t("bootstrapErrFormIncomplete"), "bad");
+    try { bootstrapEmail.focus(); } catch (_) {}
+    return;
+  }
+  if (bootstrapStart.disabled) return;
+  bootstrapStart.disabled = true;
+  // Wipe the password before awaiting the send: it must not linger in the DOM
+  // while the request is in flight, nor end up in a log line or notification.
+  bootstrapPassword.value = "";
+  try {
+    await send({ type: "bootstrapLogin", email, password });
+  } catch (error) {
+    bootstrapStart.disabled = false;
+    showBootstrapMessage(error.message, "bad");
+    return;
+  }
+  bootstrapStart.disabled = false;
+  bootstrapForm.hidden = true;
+  showBootstrapMessage(t("bootstrapOpening"));
+  pollBootstrapStatus();
+});
+
+bootstrapLogin.addEventListener("click", () => {
+  if (bootstrapPollActive) {
+    // The button doubles as "cancel" while the flow runs; keep polling so the
+    // user sees the flow actually end instead of a frozen state.
+    (async () => {
+      try {
+        await send({ type: "bootstrapCancel" });
+        showBootstrapMessage(t("bootstrapCancelRequested"));
+      } catch (error) {
+        finishBootstrapPolling();
+        showBootstrapMessage(error.message, "bad");
+      }
+    })();
+    return;
+  }
+  // Typing moves into the popup so the console's IME can no longer garble it;
+  // the form is a toggle and never starts the flow by itself.
+  bootstrapForm.hidden = !bootstrapForm.hidden;
+});
+
+function applyBootstrapAvailability() {
+  if (!bootstrapLogin) return;
+  const info = helper?.bootstrap;
+  if (info && info.available === false) {
+    bootstrapLogin.disabled = true;
+    bootstrapLogin.title = t("bootstrapUnavailableTitle");
+  } else {
+    bootstrapLogin.title = helper?.credentials
+      ? t("bootstrapReloginTitle")
+      : t("bootstrapLoginTitle");
+  }
+}
+
 usageButton.addEventListener("click", async () => {
   usageButton.disabled = true;
-  usageText.textContent = "正在查询 Mozilla 本月用量…";
+  usageText.textContent = t("usageQuerying");
   try { const response = await send({ type: "usage" }); usageText.textContent = formatUsageText(response.usage); }
   catch (error) { usageText.textContent = translateUiError(error.message); }
   finally { usageButton.disabled = false; }
@@ -844,13 +1212,13 @@ usageButton.addEventListener("click", async () => {
 
 openFolder.addEventListener("click", async () => { try { await send({ type: "openInstallFolder" }); } catch (error) { showNotice(error.message, "error"); } });
 removeLocal.addEventListener("click", async () => {
-  if (!confirm("删除本地组件？\n\n扩展会保留，但 VPN 将无法使用，直到重新安装本地组件。")) return;
+  if (!confirm(t("confirmRemoveLocal"))) return;
   setBusy(true);
-  try { await send({ type: "prepareRemoveLocal" }); showNotice("本地组件正在删除。", "good"); setTimeout(() => window.close(), 500); }
+  try { await send({ type: "prepareRemoveLocal" }); showNotice(t("noticeRemovingLocal"), "good"); setTimeout(() => window.close(), 500); }
   catch (error) { showNotice(error.message, "error"); setBusy(false); }
 });
 fullUninstall.addEventListener("click", async () => {
-  if (!confirm("完整卸载 Firefox IP Protection Bridge？\n\n这会关闭 VPN、删除本地组件和凭据，并从 Chrome 卸载扩展。")) return;
+  if (!confirm(t("confirmFullUninstall"))) return;
   setBusy(true);
   let token = null;
   try {
@@ -859,7 +1227,7 @@ fullUninstall.addEventListener("click", async () => {
     await chrome.management.uninstallSelf({ showConfirmDialog: false });
   } catch (error) {
     if (token) { try { await send({ type: "cancelCleanup", token }); } catch (_) {} }
-    showNotice(`卸载失败：${error.message}`, "error");
+    showNotice(t("errUninstallFailed", error.message), "error");
     setBusy(false);
   }
 });

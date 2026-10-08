@@ -5,7 +5,8 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 function Write-Step([string]$Message) { Write-Host "[FirefoxVPN] $Message" }
 
 function Get-RegisteredManifestPaths {
-    $keys=@("HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName","HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName","HKCU:\Software\Chromium\NativeMessagingHosts\$HostName")
+    # Brave keeps its own Native Messaging key; Chrome/Edge/Chromium do not cover it.
+    $keys=@("HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName","HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName","HKCU:\Software\Chromium\NativeMessagingHosts\$HostName","HKCU:\Software\BraveSoftware\Brave\NativeMessagingHosts\$HostName")
     $out=@()
     foreach($k in $keys){ if(Test-Path $k){ try{$v=(Get-Item $k).GetValue(''); if($v){$out+=[string]$v}}catch{}} }
     return $out | Select-Object -Unique
@@ -33,7 +34,7 @@ try{
 
  $json=$manifest|ConvertTo-Json -Depth 5
  [IO.File]::WriteAllText($manifestPath,$json,(New-Object Text.UTF8Encoding($false)))
- foreach($key in @("HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName","HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName","HKCU:\Software\Chromium\NativeMessagingHosts\$HostName")){New-Item $key -Force|Out-Null;Set-Item $key $manifestPath;Write-Step "Registered: $key"}
+ foreach($key in @("HKCU:\Software\Google\Chrome\NativeMessagingHosts\$HostName","HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\$HostName","HKCU:\Software\Chromium\NativeMessagingHosts\$HostName","HKCU:\Software\BraveSoftware\Brave\NativeMessagingHosts\$HostName")){New-Item $key -Force|Out-Null;Set-Item $key $manifestPath;Write-Step "Registered: $key"}
  Write-Step "Manifest: $manifestPath"
  Write-Step 'Repair complete. Restart browser and reload extension.'
  exit 0

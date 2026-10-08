@@ -69,6 +69,19 @@ button { color: inherit; }
 .setting-block.compact { padding: 11px 12px; }
 .setting-label { font-size: 13px; font-weight: 750; }
 .setting-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* The two account actions stack on the right: the row stays narrow, the primary
+   action (browser login) reads first, and both buttons share one width. The
+   label is top-aligned with the first button so the two share a reading line
+   instead of floating in the middle of the stack. */
+.setting-head-stacked { align-items: flex-start; }
+.setting-head-stacked .setting-label { padding-top: 3px; }
+/* Label and status live in one column beside the buttons, so the text sits
+   tight under the heading instead of being pushed down by the button stack. */
+.setting-copy { flex: 1; min-width: 0; }
+.setting-copy .detail { margin-top: 3px; }
+.setting-copy .credential-freshness { margin-top: 2px; }
+.setting-actions { display: flex; flex-direction: column; align-items: stretch; gap: 4px; flex: none; }
+.setting-actions .small-button { padding: 3px 10px; white-space: nowrap; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; margin-top: 9px; padding: 2px; border-radius: 8px; background: #ededf0; }
 .segment { height: 33px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font-size: 12.5px; font-weight: 650; }
 .segment.active { background: #fff; color: #004ec2; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
@@ -90,6 +103,22 @@ button { color: inherit; }
 .credential-freshness { margin-top: 3px; font-size: 10.5px; color: #85858d; }
 .credential-freshness.warn { color: #a06000; }
 .credential-freshness.bad { color: #c5221f; }
+.bootstrap-progress { margin-top: 3px; font-size: 10.5px; color: #63636b; }
+.bootstrap-progress.ok { color: #137333; }
+.bootstrap-progress.bad { color: #c5221f; }
+/* Inline login form + challenge: all typing stays inside the popup because a
+   console window garbles Chinese IME. Compact vertical layout like .rule-import. */
+.bootstrap-form, .bootstrap-challenge { margin-top: 8px; display: grid; gap: 7px; }
+/* display:grid would beat the UA's [hidden] rule and leak the collapsed panels. */
+.bootstrap-form[hidden], .bootstrap-challenge[hidden], .bootstrap-captcha-img[hidden] { display: none; }
+.bootstrap-form input, .bootstrap-challenge-row input { min-width: 0; height: 30px; border: 1px solid #b7b7bd; border-radius: 6px; padding: 0 9px; font-size: 11.5px; outline: none; box-sizing: border-box; }
+.bootstrap-form input:focus, .bootstrap-challenge-row input:focus { border-color: #0060df; box-shadow: 0 0 0 2px rgba(0,96,223,.15); }
+.bootstrap-form-actions { display: flex; gap: 8px; }
+.bootstrap-challenge-hint { margin-top: 0; font-size: 10.5px; }
+.bootstrap-captcha-img { max-width: 180px; border: 1px solid #e3e3e8; border-radius: 6px; }
+.bootstrap-challenge-row { display: flex; gap: 7px; }
+.bootstrap-challenge-row input { flex: 1; }
+.bootstrap-challenge-row button { flex: none; }
 /* Rule export/import: a textarea with pill buttons, so "导出 -> 粘贴 -> 导入"
    is one straight flow and the text can be copied by hand if needed. */
 .rule-transfer { display: flex; gap: 8px; margin-top: 9px; }

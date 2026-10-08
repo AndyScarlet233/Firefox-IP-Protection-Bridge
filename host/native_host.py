@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 HOST_NAME = "org.firefox_ip_protection.chrome_bridge"
-BRIDGE_VERSION = "0.9.1"
+BRIDGE_VERSION = "0.9.7"
 SOCKS_HOST = "127.0.0.1"
 SOCKS_PORT = 1090
 SCHEMA = "firefox-ip-protection-renewal-credentials-v1"
@@ -41,9 +41,23 @@ PROJECT_ROOT = ROOT.parent
 UPSTREAM = ROOT / "firefox-ip-protection-pool"
 SYSTEM_PYTHON_FILE = ROOT / "system_python.txt"
 PACKAGES_DIR = ROOT / "packages"
+# Interactive browser login (Playwright Firefox) launched from the extension.
+BOOTSTRAP_HEARTBEAT = UPSTREAM / "tokens" / "bootstrap_status.json"
+BOOTSTRAP_CANCEL_EVENT = UPSTREAM / "tokens" / "bootstrap_cancel.event"
+BOOTSTRAP_SCRIPT = UPSTREAM / "login_and_bootstrap.py"
+# The heartbeat file stops being refreshed only if the child died violently;
+# the extension then reports the login as failed instead of waiting forever.
+BOOTSTRAP_STALE_SECONDS = 120.0
+BOOTSTRAP_MAX_LIFETIME_SECONDS = 30 * 60
 LOG_DIR = ROOT / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 POOL_LOG = LOG_DIR / "ipp-pool.log"
+# Command audit log. "Clicked the button and nothing happened" is otherwise
+# undiagnosable: the popup, the service worker and this host are three separate
+# processes, and only the host can prove whether a command arrived. Only command
+# names, outcomes and non-secret error text are written - never payload values.
+BRIDGE_LOG = LOG_DIR / "bridge.log"
+BRIDGE_LOG_MAX_BYTES = 512 * 1024
 EXITS_JSON = UPSTREAM / "export" / "exits.json"
 LATENCY_CACHE_FILE = ROOT / "node-latency-cache.json"
 # Long caches keep a browser restart from re-fetching the server list and
@@ -169,6 +183,9 @@ def upstream_env() -> dict[str, str]:
     # Keep the VPN runtime isolated from arbitrary user-site packages while still
     # allowing our explicit runtime\packages directory through PYTHONPATH.
     env["PYTHONNOUSERSITE"] = "1"
+    # The browser-login flow must use the Playwright browser build pinned inside
+    # the stable runtime, never one from the user profile (which may not exist).
+    env["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / "pw-browsers")
     return env
 
 
@@ -531,7 +548,7 @@ class PoolManager:
             self.locations(force=False)
 
             if not self.credentials_present():
-                raise BridgeError("尚未导入 Firefox 登录凭据。请先点击“从 Firefox 导入”。")
+                raise BridgeError("尚未导入 Firefox 登录凭据。请先在扩展设置中点击“浏览器登录”或“从 Firefox 导入”。")
 
             resolved_country, _, ranked_nodes = self._resolve_country(country)
             selected_nodes = ranked_nodes[:MAX_FAST_BACKENDS]
@@ -744,6 +761,7 @@ class PoolManager:
                 "port": SOCKS_PORT,
                 "installRoot": str(PROJECT_ROOT),
                 "bridgeVersion": BRIDGE_VERSION,
+                "bootstrap": self._bootstrap_status_locked(),
             }
 
     def usage(self) -> str:
@@ -767,6 +785,170 @@ class PoolManager:
             detail = safe_tail(result.stderr or result.stdout, 650)
             raise BridgeError(detail or "Firefox 凭据导入或 ProxyPass 验证失败。")
         return f"已从 Firefox 配置 {profile.name} 导入：{mask_email(account['email'])}"
+
+    # ------------------------------------------------------------------
+    # Interactive browser login (no desktop Firefox required)
+    # ------------------------------------------------------------------
+
+    def bootstrap_available(self) -> bool:
+        return BOOTSTRAP_SCRIPT.is_file() and (PACKAGES_DIR / "playwright").is_dir()
+
+    def bootstrap_login(self, email: str = "", password: str = "") -> dict[str, Any]:
+        with self.lock:
+            self.prerequisites()
+            if not BOOTSTRAP_SCRIPT.is_file():
+                raise BridgeError("登录脚本缺失，请重新运行 INSTALL-OR-REPAIR.cmd。")
+            if not (PACKAGES_DIR / "playwright").is_dir():
+                raise BridgeError("浏览器登录组件未安装，请重新运行 INSTALL-OR-REPAIR.cmd。")
+            if not email or not password:
+                # An older extension build sends this command without the
+                # credentials (it used to collect them in a console window).
+                # Say so explicitly instead of looking like a dead button.
+                bridge_log("bootstrap_login rejected: no credentials in payload (stale extension?)")
+                raise BridgeError(
+                    "扩展版本过旧：请在扩展管理页点击“重新加载”后再试（新版登录需要邮箱和密码）。"
+                )
+            existing = self._bootstrap_status_locked()
+            if existing.get("running"):
+                bridge_log("bootstrap_login skipped: already running")
+                return {"launched": True, "alreadyRunning": True}
+            # The previous run's terminal state must not leak into this one,
+            # and a stale cancel marker must not kill the new attempt.
+            try:
+                BOOTSTRAP_HEARTBEAT.unlink()
+            except OSError:
+                pass
+            try:
+                BOOTSTRAP_CANCEL_EVENT.unlink()
+            except OSError:
+                pass
+            try:
+                # The popup collects the account material with Chrome's own IME
+                # (console input mangles CJK); hand it over through the one-shot
+                # input file the child consumes and deletes immediately.
+                payload = json.dumps(
+                    {"kind": "credentials", "email": email, "password": password},
+                    ensure_ascii=False,
+                )
+                tokens_dir = UPSTREAM / "tokens"
+                tokens_dir.mkdir(parents=True, exist_ok=True)
+                input_path = tokens_dir / "bootstrap_input.json"
+                atomic_write_private(input_path, payload)
+                # No stdio redirection here on purpose: combining redirected
+                # handles with close_fds made the child start without usable
+                # stdio. The script mirrors its own output to
+                # logs\bootstrap-login.log instead.
+                subprocess.Popen(
+                    [str(system_python_path()), str(BOOTSTRAP_SCRIPT)],
+                    cwd=UPSTREAM,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    env=upstream_env(),
+                    close_fds=True,
+                )
+            except OSError as exc:
+                bridge_log(f"bootstrap_login spawn failed: {type(exc).__name__}")
+                raise BridgeError("无法启动登录流程。") from exc
+            bridge_log("bootstrap_login launched (child started)")
+            return {"launched": True, "alreadyRunning": False}
+
+    def bootstrap_submit(self, value: str) -> dict[str, Any]:
+        value = str(value or "").strip()
+        if not value:
+            raise BridgeError("提交内容不能为空。")
+        with self.lock:
+            status = self._bootstrap_status_locked()
+            if not status.get("running"):
+                raise BridgeError("当前没有进行中的登录流程。")
+            need = status.get("need")
+            seq = status.get("needSeq")
+            if need not in {"email_code", "totp_code", "captcha"} or not isinstance(seq, int):
+                raise BridgeError("当前不需要提交验证信息。")
+            payload = json.dumps({"kind": need, "seq": seq, "value": value}, ensure_ascii=False)
+            atomic_write_private(UPSTREAM / "tokens" / "bootstrap_input.json", payload)
+            return {"submitted": True, "need": need}
+
+    def bootstrap_cancel(self) -> None:
+        try:
+            BOOTSTRAP_CANCEL_EVENT.write_text("cancel", encoding="ascii")
+        except OSError as exc:
+            raise BridgeError("无法写入取消标记。") from exc
+
+    def _bootstrap_status_locked(self) -> dict[str, Any]:
+        available = self.bootstrap_available()
+        result: dict[str, Any] = {
+            "available": available,
+            "running": False,
+            "stage": "idle",
+            "detail": "",
+            "accountLabel": "",
+            "success": None,
+            "need": None,
+            "needSeq": None,
+            "captchaB64": None,
+        }
+        if not available:
+            result["stage"] = "unavailable"
+            result["detail"] = "浏览器登录组件未安装，请重新运行 INSTALL-OR-REPAIR.cmd。"
+            return result
+        try:
+            raw = json.loads(BOOTSTRAP_HEARTBEAT.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            raw = None
+        if not isinstance(raw, dict):
+            return result
+        stage = str(raw.get("stage") or "")
+        detail = str(raw.get("detail") or "")
+        updated_at = raw.get("updated_at")
+        success = raw.get("success")
+        need = raw.get("need")
+        need_seq = raw.get("need_seq")
+        captcha_b64 = raw.get("captcha_b64")
+        result["stage"] = stage or "idle"
+        result["detail"] = detail
+        result["success"] = success if isinstance(success, bool) else None
+        if need in {"email_code", "totp_code", "captcha"}:
+            result["need"] = need
+            result["needSeq"] = need_seq if isinstance(need_seq, int) else None
+        if need == "captcha" and isinstance(captcha_b64, str) and captcha_b64:
+            result["captchaB64"] = captcha_b64
+        if stage in {"done", "failed"}:
+            if isinstance(success, bool) and success:
+                result["accountLabel"] = self._bootstrap_account_label()
+            return result
+        # A non-terminal stage is "running" only while the heartbeat is fresh;
+        # otherwise the child is gone without writing a terminal state.
+        fresh = isinstance(updated_at, (int, float)) and (time.time() - float(updated_at)) < BOOTSTRAP_STALE_SECONDS
+        if fresh:
+            result["running"] = True
+        else:
+            result["running"] = False
+            result["stage"] = "failed"
+            result["success"] = False
+            result["detail"] = detail or "登录流程已中断，请重试。"
+        return result
+
+    def _bootstrap_account_label(self) -> str:
+        try:
+            data = json.loads((UPSTREAM / "tokens" / "renewal_credentials.json").read_text(encoding="utf-8"))
+            email = data.get("email")
+            if isinstance(email, str) and email:
+                return f"已通过浏览器登录：{mask_email(email)}"
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            pass
+        return "已通过浏览器登录"
+
+    def bootstrap_status(self) -> dict[str, Any]:
+        with self.lock:
+            result = self._bootstrap_status_locked()
+            # The cancel marker is only meaningful while a flow is running;
+            # drop it as soon as the console window closes so a stale marker
+            # cannot kill the next login attempt.
+            if not result.get("running"):
+                try:
+                    BOOTSTRAP_CANCEL_EVENT.unlink()
+                except OSError:
+                    pass
+            return {"bootstrap": result}
 
 
 manager = PoolManager()
@@ -986,6 +1168,47 @@ def safe_tail(text: str, max_chars: int) -> str:
     return text
 
 
+def bridge_log(line: str) -> None:
+    """Append one sanitized line to the command audit log."""
+    try:
+        if BRIDGE_LOG.exists() and BRIDGE_LOG.stat().st_size > BRIDGE_LOG_MAX_BYTES:
+            BRIDGE_LOG.write_text("", encoding="utf-8")
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(BRIDGE_LOG, "a", encoding="utf-8") as handle:
+            handle.write(f"{stamp} {safe_tail(line, 400)}\n")
+    except OSError:
+        pass
+
+
+def atomic_write_private(path: Path, text: str) -> None:
+    """Write a secret-bearing file that only the current user can read.
+
+    The bootstrap input file carries the account password between the bridge
+    and the login child; restrict it to the owner and remove any inherited
+    wide ACLs so other local accounts cannot read it.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            FILE_ATTRIBUTE_HIDDEN = 0x2
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.SetFileAttributesW(str(tmp), FILE_ATTRIBUTE_HIDDEN)
+            advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+            DACL_SECURITY_INFORMATION = 0x00000004
+            PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+            advapi32.SetNamedSecurityInfoW(
+                str(tmp), 1, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, None, None, None, None
+            )
+        except Exception:
+            pass
+    os.replace(tmp, path)
+
+
 def read_log_tail(path: Path, max_chars: int) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -1021,9 +1244,10 @@ def refresh_state_summary() -> tuple[str | None, int | None, float | None]:
 def credential_freshness() -> dict[str, Any]:
     """Report how recently the stored Mozilla credential was last proven good.
 
-    The imported session token is only refreshed while Firefox itself runs, so
-    the UI can warn before a stale token silently breaks the tunnel. Values are
-    derived from the sanitized state file and never contain secret material.
+    Tokens minted by the in-app browser login renew themselves here; only
+    imported desktop-Firefox sessions still depend on Firefox running to stay
+    fresh. Values are derived from the sanitized state file and never contain
+    secret material.
     """
     path = UPSTREAM / "tokens" / "refresh_state.json"
     try:
@@ -1173,6 +1397,15 @@ def handle(message: dict[str, Any]) -> dict[str, Any]:
         return {"locations": manager.locations(force=False)}
     if command == "import_firefox":
         return {"accountLabel": manager.import_firefox()}
+    if command == "bootstrap_login":
+        return manager.bootstrap_login(str(message.get("email") or ""), str(message.get("password") or ""))
+    if command == "bootstrap_submit":
+        return manager.bootstrap_submit(str(message.get("value") or ""))
+    if command == "bootstrap_status":
+        return manager.bootstrap_status()
+    if command == "bootstrap_cancel":
+        manager.bootstrap_cancel()
+        return {"cancelRequested": True}
     if command == "open_folder":
         open_install_folder()
         return {"opened": True}
@@ -1197,6 +1430,7 @@ def configure_windows_binary_stdio() -> None:
 
 def main() -> int:
     configure_windows_binary_stdio()
+    bridge_log(f"host start pid={os.getpid()}")
     try:
         while True:
             try:
@@ -1205,6 +1439,7 @@ def main() -> int:
                 break
             if message is None:
                 break
+            command = str(message.get("command") or "")
             response: dict[str, Any] = {"id": message.get("id"), "ok": True}
             try:
                 response.update(handle(message))
@@ -1213,8 +1448,12 @@ def main() -> int:
             except Exception as exc:
                 # Do not serialize arbitrary reprs that might contain secret material.
                 response.update({"ok": False, "error": f"本地桥接发生 {type(exc).__name__}。"})
+            if command != "status" or response.get("ok") is False:
+                outcome = "ok" if response.get("ok") else f"error={response.get('error')}"
+                bridge_log(f"cmd={command or '<empty>'} {outcome}")
             write_native_message(response)
     finally:
+        bridge_log(f"host stop pid={os.getpid()}")
         manager.stop()
     return 0
 

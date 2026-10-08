@@ -151,7 +151,9 @@ class StalePacReconciliationTests(unittest.TestCase):
 
     def test_proxy_changes_wait_for_chrome_to_settle(self) -> None:
         self.assertIn("waitForProxyCondition", self.source)
-        self.assertIn("Chrome 代理设置未及时生效", self.source)
+        # The message is localized now, so assert the i18n key that resolves to
+        # "Chrome 代理设置未及时生效，请重试。" in the zh_CN catalogue.
+        self.assertIn('t("errProxyNotApplied")', self.source)
         self.assertIn("waitForNativePortRelease", self.source)
 
     def test_dynamic_route_rules_are_replaced_atomically(self) -> None:

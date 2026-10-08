@@ -1,0 +1,5 @@
+# Optional dependency for the in-app browser login (Playwright drives a headless Firefox).
+# The Windows setup script installs this into the local runtime automatically;
+# a failure only disables the browser-login button.
+-r requirements.txt
+playwright>=1.40.0

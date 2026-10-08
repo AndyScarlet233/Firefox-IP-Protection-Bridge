@@ -149,23 +149,45 @@ function disconnectNativePort(port = nativePort) {
   try { port.disconnect(); } catch (_) {}
 }
 
+// ---------------------------------------------------------------------------
+// Localization. The service worker has no DOM, so every user-visible string is
+// resolved through chrome.i18n.getMessage(); the English catalogue in
+// _locales/en is the default locale, so a missing key falls back to the key
+// itself rather than rendering an empty banner.
+// ---------------------------------------------------------------------------
+function uiLanguage() {
+  try { return String(chrome?.i18n?.getUILanguage?.() || "en"); }
+  catch (_) { return "en"; }
+}
+
+function t(key, ...substitutions) {
+  try {
+    const text = chrome?.i18n?.getMessage?.(key, substitutions.map((value) => String(value)));
+    if (typeof text === "string" && text) return text;
+  } catch (_) {}
+  return key;
+}
+
+const ENGLISH_UI = /^en\b/i.test(uiLanguage());
+
 function translateBridgeError(message = "") {
   const text = String(message || "").trim();
   if (!text) return "";
   const replacements = [
-    [/Specified native messaging host not found\.?/i, "未找到本地桥接程序。请运行 INSTALL-OR-REPAIR.cmd 修复本地桥接；修复后扩展目录可以移动或改名。"],
-    [/Error when communicating with the native messaging host\.?/i, "与本地桥接程序通信失败。请确认已安装 runtime\\vpn_bridge_host.exe，并运行 INSTALL-OR-REPAIR.cmd 修复后重启浏览器。"],
-    [/Access to the specified native messaging host is forbidden\.?/i, "Chrome 无权访问本地桥接程序。请确认扩展已由当前安装脚本注册。"],
-    [/Native host has exited\.?/i, "本地桥接程序已退出。"],
-    [/Native bridge returned no response/i, "本地桥接程序没有返回结果。"],
-    [/Native bridge timeout while running (.+)/i, (_, cmd) => `本地桥接程序执行 ${cmd} 时超时。`],
-    [/Native bridge disconnected/i, "本地桥接程序已断开连接。"],
-    [/Chrome proxy is controlled by another extension or policy\.?/i, "Chrome 代理正被其他扩展或管理员策略控制。"]
+    [/Specified native messaging host not found\.?/i, t("errNativeHostNotFound")],
+    [/Error when communicating with the native messaging host\.?/i, t("errNativeHostCommunicate")],
+    [/Access to the specified native messaging host is forbidden\.?/i, t("errNativeHostForbiddenRegistered")],
+    [/Native host has exited\.?/i, t("errNativeHostExited")],
+    [/Native bridge returned no response/i, t("errNativeNoResponse")],
+    [/Native bridge timeout while running (.+)/i, (_, cmd) => t("errNativeTimeout", cmd)],
+    [/Native bridge disconnected/i, t("errNativeDisconnected")],
+    [/Chrome proxy is controlled by another extension or policy\.?/i, t("errProxyControlled")]
   ];
   for (const [pattern, replacement] of replacements) {
     const match = text.match(pattern);
     if (match) return typeof replacement === "function" ? replacement(...match) : replacement;
   }
+  if (ENGLISH_UI) return text;
   return text
     .replace(/\bNative bridge\b/g, "本地桥接程序")
     .replace(/\bhelper\b/gi, "桥接程序")
@@ -174,7 +196,7 @@ function translateBridgeError(message = "") {
 
 function normalizeDomain(input) {
   let value = String(input || "").trim().toLowerCase();
-  if (!value) throw new Error("请输入网站域名。");
+  if (!value) throw new Error(t("errNoDomainEntered"));
   value = value.replace(/^\*\./, "").replace(/^\.+|\.+$/g, "");
   try {
     if (value.includes("://") || value.includes("/") || value.includes(":") || value.includes("?")) {
@@ -185,14 +207,14 @@ function normalizeDomain(input) {
       value = url.hostname.toLowerCase().replace(/^\.+|\.+$/g, "");
     }
   } catch (_) {
-    throw new Error("这个网站地址看起来无效。");
+    throw new Error(t("errDomainInvalid"));
   }
-  if (!value || value.length > 253 || value.includes(" ")) throw new Error("这个网站地址看起来无效。");
+  if (!value || value.length > 253 || value.includes(" ")) throw new Error(t("errDomainInvalid"));
   // WHATWG URL is lenient and happily turns "!!!" into a punycode hostname, so
   // a pasted text blob would silently become several bogus rules. A real rule
   // label must have a dot-separated hostname with sane characters.
   if (!DOMAIN_SHAPE.test(value)) {
-    throw new Error("这个网站地址看起来无效。");
+    throw new Error(t("errDomainInvalid"));
   }
   return value;
 }
@@ -476,7 +498,7 @@ function connectNative() {
           const { resolve: ok, reject: bad, timer } = waiter;
           pending.delete(id);
           clearTimeout(timer);
-          if (message.ok === false) bad(new Error(translateBridgeError(message.error || "本地桥接程序出错。")));
+          if (message.ok === false) bad(new Error(translateBridgeError(message.error || t("errHelperError"))));
           else ok(message);
         }
       });
@@ -547,7 +569,7 @@ async function nativeOneShot(command, payload = {}, timeoutMs = 120000) {
   const message = { id: nextRequestId++, command, ...payload };
   const request = chrome.runtime.sendNativeMessage(HOST_NAME, message).then((response) => {
     if (!response) throw new Error(translateBridgeError("Native bridge returned no response"));
-    if (response.ok === false) throw new Error(translateBridgeError(response.error || "本地桥接程序出错。"));
+    if (response.ok === false) throw new Error(translateBridgeError(response.error || t("errHelperError")));
     return response;
   });
   const timeout = new Promise((_, reject) => {
@@ -569,11 +591,11 @@ function privacyControlBlocked(details) {
 
 async function setPrivacyChromeSetting(setting, value, label) {
   if (!setting?.get || !setting?.set) {
-    throw new Error(`${label}：当前 Chrome 不支持此隐私设置。`);
+    throw new Error(t("errPrivacyUnsupported", label));
   }
   const details = await setting.get({});
   if (privacyControlBlocked(details)) {
-    throw new Error(`${label}无法修改：该设置正被其他扩展或管理员策略控制。`);
+    throw new Error(t("errPrivacyControlled", label));
   }
   await setting.set({ value, scope: "regular" });
   return setting.get({});
@@ -592,7 +614,7 @@ async function applyWebRtcLeakProtection(enabled) {
   const setting = chrome.privacy?.network?.webRTCIPHandlingPolicy;
   if (!setting) return { supported: false, effective: null, levelOfControl: "not_controllable" };
   if (enabled) {
-    const details = await setPrivacyChromeSetting(setting, "disable_non_proxied_udp", "WebRTC 防泄漏");
+    const details = await setPrivacyChromeSetting(setting, "disable_non_proxied_udp", t("labelWebrtcLeakProtection"));
     return { supported: true, effective: details.value, levelOfControl: details.levelOfControl };
   }
   const details = await clearPrivacyChromeSetting(setting);
@@ -708,7 +730,7 @@ async function setPrivacyOptionNow(option, enabled) {
     await saveState({ dnsPredictionProtection: Boolean(enabled) });
     return { ok: true, dnsPredictionProtection: Boolean(enabled), privacy: await getPrivacyStatus(next) };
   }
-  throw new Error("未知的隐私设置。");
+  throw new Error(t("errUnknownPrivacyOption"));
 }
 
 async function clearAllPrivacyOverrides() {
@@ -793,8 +815,8 @@ async function syncRegionGeolocation(state) {
 async function syncRegionShield(stateOverride=null) {
   const state = stateOverride || await getStoredState();
   const errors = [];
-  try { await syncRegionHeaderRule(state); } catch (e) { errors.push(`语言请求头：${e.message}`); }
-  try { await syncRegionGeolocation(state); } catch (e) { errors.push(`地理定位：${e.message}`); }
+  try { await syncRegionHeaderRule(state); } catch (e) { errors.push(t("regionErrorLanguageHeader", e.message)); }
+  try { await syncRegionGeolocation(state); } catch (e) { errors.push(t("regionErrorGeolocation", e.message)); }
   // Push the session-dependent state to already-open pages immediately.
   // `enabled` and `resolvedCountry` live in storage.session, which content
   // scripts cannot reliably observe directly. Without this push, a tab that
@@ -803,7 +825,7 @@ async function syncRegionShield(stateOverride=null) {
   return { active:regionShieldIsActive(state), profile:regionProfileForState(state), errors };
 }
 async function setRegionShieldOptionNow(option, value) {
-  if (option !== "enabled") throw new Error("未知的区域隐私保护设置。");
+  if (option !== "enabled") throw new Error(t("errUnknownRegionOption"));
   const state = await getStoredState();
   const regionShieldEnabled = Boolean(value);
   const next = { ...state, regionShieldEnabled };
@@ -846,7 +868,7 @@ async function readProxyControlInfoWithRetry(attempts = 3) {
       if (attempt + 1 < attempts) await sleepMs(60 * (attempt + 1));
     }
   }
-  throw lastError || new Error("无法读取 Chrome 代理状态。");
+  throw lastError || new Error(t("errProxyUnreadable"));
 }
 
 async function waitForProxyCondition(predicate, timeoutMs = PROXY_SETTLE_TIMEOUT_MS) {
@@ -904,7 +926,7 @@ function proxyMatchesPac(info, pacData) {
 async function applyChromeProxy(stateOverride = null) {
   const current = await readProxyControlInfoWithRetry();
   if (current.levelOfControl === "controlled_by_other_extensions" || current.levelOfControl === "not_controllable") {
-    throw new Error("Chrome 代理正被另一个扩展或管理员策略控制。");
+    throw new Error(t("errProxyControlOther"));
   }
   const state = stateOverride || await getStoredState();
   const pacData = pacForState(state);
@@ -918,7 +940,7 @@ async function applyChromeProxy(stateOverride = null) {
   await chrome.proxy.settings.set({ value: config, scope: "regular" });
   const applied = await waitForProxyCondition((info) => proxyMatchesPac(info, pacData));
   if (!proxyMatchesPac(applied, pacData)) {
-    throw new Error("Chrome 代理设置未及时生效，请重试。");
+    throw new Error(t("errProxyNotApplied"));
   }
 }
 
@@ -929,7 +951,7 @@ async function clearChromeProxy() {
   // until the old localhost PAC is gone from Chrome's network service.
   let current;
   try { current = await readProxyControlInfoWithRetry(); }
-  catch (_) { return { ok: false, verified: false, owned: true, error: "无法读取 Chrome 代理状态。" }; }
+  catch (_) { return { ok: false, verified: false, owned: true, error: t("errProxyUnreadable") }; }
 
   if (current?.levelOfControl !== "controlled_by_this_extension") {
     return { ok: true, verified: true, owned: false, levelOfControl: current?.levelOfControl || "unknown" };
@@ -957,7 +979,7 @@ async function clearChromeProxy() {
   }
 
   if (!after) {
-    return { ok: false, verified: false, owned: true, error: "无法确认 Chrome 代理是否已恢复直连。" };
+    return { ok: false, verified: false, owned: true, error: t("errProxyUnreadableRestore") };
   }
   const owned = proxyIsOwnedPac(after);
   return {
@@ -973,7 +995,7 @@ async function updateAction(enabled, proxyMode = "allowlist") {
   try {
     await chrome.action.setBadgeText({ text: enabled ? "VPN" : "" });
     await chrome.action.setBadgeBackgroundColor({ color: enabled ? "#00a400" : "#737373" });
-    await chrome.action.setTitle({ title: enabled ? `VPN 已开启 · ${normalizeProxyMode(proxyMode) === "allowlist" ? "白名单" : "黑名单"}` : "VPN 已关闭" });
+    await chrome.action.setTitle({ title: enabled ? t("actionTitleOn", normalizeProxyMode(proxyMode) === "allowlist" ? t("modeAllowlist") : t("modeBlacklist")) : t("actionTitleOff") });
   } catch (_) {}
 }
 
@@ -1019,7 +1041,7 @@ async function failOpenNow(reason = "", { stopNative = true } = {}) {
       lastError: message || current.lastError || ""
     });
   } catch (error) {
-    storageError = String(error?.message || "无法保存 VPN 状态。");
+    storageError = String(error?.message || t("errStorageSaveFailed"));
   }
   let offState = { ...current, enabled: false, resolvedCountry: "" };
   try { offState = { ...(await getStoredState()), enabled: false, resolvedCountry: "" }; }
@@ -1045,7 +1067,7 @@ async function startVpnNow(country, generation) {
     // PAC script after the SOCKS listener has reported ready. This prevents a stale
     // localhost proxy from black-holing startup traffic.
     const cleanup = await clearChromeProxy();
-    if (!cleanup?.ok) throw new Error(cleanup?.error || "无法确认 Chrome 已恢复直连。");
+    if (!cleanup?.ok) throw new Error(cleanup?.error || t("errRestoreDirectShort"));
     await saveState({ enabled: false, resolvedCountry: "", country: selected, lastError: "" });
     if (!isCurrentLifecycleGeneration(generation)) {
       await failOpenNow("", { stopNative: true });
@@ -1065,7 +1087,7 @@ async function startVpnNow(country, generation) {
       ? helperCheck?.status?.running === true
       : helperCheck.status.healthy === true;
     if (helperCheck?.status?.running !== true || !helperHealthy) {
-      throw new Error("本地 SOCKS5 代理启动后未通过上游连接检查。");
+      throw new Error(t("errSocksUnhealthy"));
     }
     const state = await getStoredState();
     const nextState = { ...state, enabled: true, country: selected, lastError: "" };
@@ -1120,8 +1142,8 @@ async function stopVpnNow() {
   catch (_) { finalCleanup = { ok: false, verified: false, owned: true }; }
   if (!firstCleanup?.ok || !finalCleanup?.ok || nativeStopped === false) {
     return { ok: false, error: nativeStopped === false
-      ? "本地代理进程仍在释放，请稍后重试关闭或重新加载扩展。"
-      : "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。" };
+      ? t("errProxyReleasing")
+      : t("errRestoreDirect") };
   }
   return { ok: true };
 }
@@ -1133,14 +1155,14 @@ async function changeCountryNow(country, generation) {
     const state = await getStoredState();
     if (!state.enabled) {
       const cleanup = await clearChromeProxy();
-      if (!cleanup?.ok) throw new Error(cleanup?.error || "无法确认 Chrome 已恢复直连。");
+      if (!cleanup?.ok) throw new Error(cleanup?.error || t("errRestoreDirectShort"));
       await saveState({ country: selected });
       return { ok: true, restarted: false };
     }
 
     // Disable the old route only after DIRECT has been positively verified.
     const cleanup = await clearChromeProxy();
-    if (!cleanup?.ok) throw new Error(cleanup?.error || "无法确认 Chrome 已恢复直连。");
+    if (!cleanup?.ok) throw new Error(cleanup?.error || t("errRestoreDirectShort"));
     await saveState({ country: selected, enabled: false, resolvedCountry: "" });
     await syncRegionShield({ ...state, enabled: false, resolvedCountry: "", country: selected });
     await syncPrivacySettings({ ...state, enabled: false, country: selected });
@@ -1159,7 +1181,7 @@ async function changeCountryNow(country, generation) {
       ? helperCheck?.status?.running === true
       : helperCheck.status.healthy === true;
     if (helperCheck?.status?.running !== true || !helperHealthy) {
-      throw new Error("切换位置后本地 SOCKS5 代理未通过上游连接检查。");
+      throw new Error(t("errSocksUnhealthyCountry"));
     }
     const nextState = { ...state, country: selected, enabled: true };
     await syncPrivacySettings(nextState);
@@ -1240,7 +1262,7 @@ async function commitRouteMutation(state, next, patch) {
       await applyChromeProxy(next);
     } else {
       const cleanup = await clearChromeProxy();
-      if (!cleanup?.ok) throw new Error(cleanup?.error || "无法确认 Chrome 已恢复直连。");
+      if (!cleanup?.ok) throw new Error(cleanup?.error || t("errRestoreDirectShort"));
     }
     await saveState(patch);
     await syncRouteDependentProtections(next);
@@ -1352,8 +1374,8 @@ function parseRulePayload(text) {
   if (raw.startsWith("[")) {
     let parsed;
     try { parsed = JSON.parse(raw); }
-    catch (_) { throw new Error("导入内容不是有效的 JSON 数组。"); }
-    if (!Array.isArray(parsed)) throw new Error("导入内容必须是数组。");
+    catch (_) { throw new Error(t("errImportNotJson")); }
+    if (!Array.isArray(parsed)) throw new Error(t("errImportNotArray"));
     items = parsed;
   } else {
     // One entry per line first, so a comment or header line stays whole and can
@@ -1379,7 +1401,7 @@ function parseRulePayload(text) {
       if (!seen.has(domain)) seen.add(domain);
     }
   }
-  if (!seen.size) throw new Error("没有找到可导入的域名。");
+  if (!seen.size) throw new Error(t("errImportNoDomains"));
   return [...seen].sort();
 }
 
@@ -1392,7 +1414,7 @@ async function exportManagedDomainsNow() {
 
 async function importManagedDomainsNow(text) {
   const incoming = parseRulePayload(text);
-  if (!incoming.length) throw new Error("没有可导入的域名。");
+  if (!incoming.length) throw new Error(t("errImportNoDomainsShort"));
   const state = await getStoredState();
   const before = normalizeProxyMode(state.proxyMode) === "allowlist" ? state.allowlist : state.bypassSites;
   const merged = normalizeManagedDomainArray([...before, ...incoming]);
@@ -1410,8 +1432,8 @@ async function importManagedDomainsNow(text) {
 async function prepareCleanup(mode) {
   const cleanup = await clearChromeProxy();
   if (!cleanup?.ok) {
-    await failOpenNow(cleanup.error || "无法确认 Chrome 已恢复直连。", { stopNative: true });
-    throw new Error(cleanup.error || "无法确认 Chrome 已恢复直连，未执行本地清理。");
+    await failOpenNow(cleanup.error || t("errRestoreDirectShort"), { stopNative: true });
+    throw new Error(cleanup.error || t("errRestoreDirectNoCleanup"));
   }
   let stopError = null;
   try {
@@ -1458,6 +1480,9 @@ async function fullStatusNow() {
   try {
     const response = state.enabled ? await nativeRequest("status", {}, 15000) : await nativeOneShot("status", {}, 15000);
     helper = response.status || helper;
+    // The host may report the browser-login flow next to status rather than
+    // inside it; keep either shape reachable as helper.bootstrap for the popup.
+    if (response.bootstrap) helper.bootstrap = response.bootstrap;
   } catch (error) { helperError = error.message; }
 
   let proxy = await readProxyControlInfoWithRetry().catch(() => null);
@@ -1471,8 +1496,8 @@ async function fullStatusNow() {
     if (!healthy) {
       const reason = helperError ||
         (helper.running !== true
-          ? "本地 SOCKS5 代理已停止，已恢复浏览器直连。"
-          : "Chrome 代理状态异常，已恢复浏览器直连。");
+          ? t("errSocksStoppedRecovered")
+          : t("errProxyAbnormalRecovered"));
       // A dead child is the exact failure mode that leaves Chrome showing
       // ERR_PROXY_CONNECTION_FAILED. Repair it while the popup is opening,
       // before returning a misleading enabled=true state to the UI.
@@ -1494,7 +1519,7 @@ async function fullStatusNow() {
     : helper.healthy === true;
   const proxySafe = Boolean(proxy) && !proxyOwnedByUs && proxyCleanup?.ok !== false;
   if (!state.enabled && !proxySafe && !helperError) {
-    helperError = "无法确认 Chrome 已恢复直连，请重新加载扩展或重启 Chrome。";
+    helperError = t("errRestoreDirect");
   }
   const healthy = state.enabled
     ? (helper.running === true && helperHealthy && proxyOwnedByUs && Boolean(proxy))
@@ -1575,8 +1600,8 @@ async function monitorActiveVpnHealth() {
       }
 
       const reason = state.lastError || (helper.running !== true
-        ? "本地 SOCKS5 代理已停止，正在自动恢复。"
-        : "本地 SOCKS5 代理健康检查失败，正在自动恢复。");
+        ? t("errSocksStoppedRecovering")
+        : t("errSocksUnhealthyRecovering"));
       try {
         await startVpnNow(state.country, generation);
         return { ok: true, active: true, recovered: true };
@@ -1624,6 +1649,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "exportManagedDomains": return { ok: true, ...(await exportManagedDomainsNow()) };
       case "removeManagedDomain": return removeManagedDomain(message.domain);
       case "importFirefox": return requestForCurrentState("import_firefox", {}, 150000);
+      // Browser-login flow: these are fire-and-poll, so each native call is
+      // kept well under the user-visible wait (login itself runs unattended).
+      // Credentials are forwarded once to the bridge and are never written to
+      // storage or logs here, so a lastError dump stays free of secrets.
+      case "bootstrapLogin": {
+        // Stop before the bridge call: an empty payload would start a flow
+        // that then just waits for input the user never typed.
+        if (typeof message.email !== "string" || !message.email.trim() ||
+            typeof message.password !== "string" || !message.password) {
+          return { ok: false, error: t("errEmailPasswordRequired") };
+        }
+        return nativeOneShot("bootstrap_login", { email: message.email, password: message.password }, 30000);
+      }
+      // The value is the email code or captcha answer typed in the popup; it
+      // never carries the account password.
+      case "bootstrapSubmit": return nativeOneShot("bootstrap_submit", { value: message.value }, 15000);
+      case "bootstrapStatus": return nativeOneShot("bootstrap_status", {}, 20000);
+      case "bootstrapCancel": return nativeOneShot("bootstrap_cancel", {}, 10000);
       case "usage": return requestForCurrentState("usage", {}, 90000);
       case "locations": return getLocations();
       case "sync": {
@@ -1639,7 +1682,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // A popup left over from a previous build can send a command this build
       // no longer knows. That is not a user-facing VPN failure, so do not
       // persist it into lastError and show it as a red banner.
-      default: return sendResponse({ ok: false, error: `未知的扩展命令：${JSON.stringify(message?.type ?? null)}`, ignored: true });
+      default: return sendResponse({ ok: false, error: t("errUnknownExtensionCommand", JSON.stringify(message?.type ?? null)), ignored: true });
     }
   })().then(sendResponse).catch((error) => {
     saveState({ lastError: error.message }).finally(() => sendResponse({ ok: false, error: error.message }));
@@ -1677,7 +1720,7 @@ async function resetVpnForFreshBrowserSession(reason = "") {
   // A persistent Native Messaging port may still own the old pool process. Ask
   // it to stop and wait for 1090 to be released before auto-connect can start.
   if (nativePort) await stopNativeHelper(9000);
-  if (!cleanup?.ok) throw new Error(cleanup.error || "无法确认 Chrome 已恢复直连。");
+  if (!cleanup?.ok) throw new Error(cleanup.error || t("errRestoreDirectShort"));
   const state = await getStoredState();
   await saveState({ enabled: false, resolvedCountry: "", lastError: reason || "" });
   await syncRegionShield({ ...state, enabled: false, resolvedCountry: "" });
@@ -1741,7 +1784,7 @@ async function attemptAutoConnect(country) {
       // The tunnel bootstrap takes several seconds; surface that on the toolbar
       // icon right away instead of leaving the browser-startup state ambiguous.
       // startVpn/failOpenNow overwrite the title when they finish.
-      try { await chrome.action.setTitle({ title: "正在自动连接 VPN…" }); } catch (_) {}
+      try { await chrome.action.setTitle({ title: t("actionTitleConnectingAuto") }); } catch (_) {}
       try {
         const response = await startVpn(country);
         if (response?.superseded) return { ok: true, superseded: true, attempts: attempt + 1 };
@@ -1754,9 +1797,9 @@ async function attemptAutoConnect(country) {
         }
       }
     }
-    const message = String(lastError?.message || "未知错误");
+    const message = String(lastError?.message || t("errUnknownError"));
     // Keep the historical wording so existing diagnostics stay recognisable.
-    try { await saveState({ lastError: `启动时自动连接失败：${message}` }); } catch (_) {}
+    try { await saveState({ lastError: t("errAutoConnectFailed", message) }); } catch (_) {}
     return { ok: false, error: message, attempts: AUTO_CONNECT_RETRY_DELAYS_MS.length + 1 };
   } finally {
     autoConnectInFlight = false;
