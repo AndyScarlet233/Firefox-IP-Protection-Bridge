@@ -61,6 +61,7 @@ logs/
 *.egg-info/
 build/
 dist/
+bundle/
 .cache/
 
 # Captures and private reports

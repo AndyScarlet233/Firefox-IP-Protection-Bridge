@@ -103,45 +103,48 @@ The raw account session token is never handed back to the extension page or to
 There are two ways to end up with a working install. Both start from the same
 code; they differ only in who builds the runtime.
 
-### Option 1 — a prebuilt bridge executable
+### Option 1 — the one-click bundle (recommended)
 
-The bridge has to be a single `.exe` because Chrome starts a native host by
-executable path and cannot pass it a script argument. Pushing a `v*` tag runs
-[`.github/workflows/build-bridge.yml`](.github/workflows/build-bridge.yml), which
-freezes it on a Windows runner, talks to the result over the real Native
-Messaging protocol, and attaches `vpn_bridge_host.exe` and `bridge-build.json` to
-the release. Downloading those two files avoids needing a Windows build
-toolchain; you still assemble the runtime and register the host as in option 2.
+Download `Firefox-IP-Protection-Bridge-<version>.zip` from the
+[Releases](../../releases) page, extract it anywhere, and double-click
+**`INSTALL-OR-REPAIR.cmd`**. The script then:
 
-The workflow can also be run on demand from the Actions tab, which produces the
-same files as a downloadable build artifact.
+1. finds a Python 3.9 or newer interpreter, and offers to install one with
+   `winget` if there is none;
+2. copies the runtime into `%LOCALAPPDATA%\FirefoxChromeVPNBridge`;
+3. installs the Python packages the bridge needs;
+4. downloads the browser-login component (about 80 MB — pass
+   `-SkipBrowserLogin` to skip it, or rerun later to add it);
+5. writes the Native Messaging manifest and registers it for Chrome, Edge,
+   Chromium and Brave.
 
-### Option 2 — build it yourself
+It is safe to run again: a second run repairs or upgrades an existing install.
 
-This repository is intended for source review and for loading the unpacked
-extension. Building the runtime is a separate step described in
-[`docs/BUILD.md`](docs/BUILD.md).
+Afterwards it prints the one step Chrome does not allow a script to perform —
+loading the unpacked extension from the `extension` folder inside the archive:
 
-1. **Build the runtime.** Either run
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and select that `extension` folder.
+4. Open the popup, expand **Settings**, and click **Sign in via browser**.
+
+### Option 2 — from a source checkout
+
+The same script works in a git checkout. It needs a frozen bridge executable,
+because Chrome starts a native host by executable path and cannot run a `.py`
+file; see [`docs/BUILD.md`](docs/BUILD.md) for the details.
+
+1. **Get the executable.** Either download `vpn_bridge_host.exe` and
+   `bridge-build.json` from the Releases page into `dist\`, or build it:
    `python -m PyInstaller --noconfirm --clean --distpath dist --workpath build tools/bridge-rebuild/vpn_bridge_host.spec`
-   locally, or download the artifact described in option 1. The repair script
-   refuses to run against a source-only checkout: Chrome's Native Messaging
-   manifest points at a single executable, so a built
-   `runtime\vpn_bridge_host.exe` must exist first.
-2. **Register the Native Messaging host.** Run `INSTALL-OR-REPAIR.cmd` in the
-   repository root, or `scripts/install-or-repair.ps1` directly from PowerShell.
-   This writes the host manifest next to the built executable and registers it
-   for Chrome, Edge, Chromium, and Brave under `HKCU`. It stops stale host
-   processes first. If the runtime is missing, the script stops and points you
-   back to `docs/BUILD.md`.
-3. **Load the extension.** Open `chrome://extensions`, turn on **Developer mode**,
-   click **Load unpacked**, and select this repository's `extension` directory.
-4. **Get credentials.** Open the popup, expand **Settings**, and either click
-   **Sign in via browser** or, on a machine that already has Firefox signed
-   in, **Import from Firefox**. See
-   [Getting credentials](#getting-credentials).
-5. **Connect.** Click **Turn on VPN**, pick a region or leave the
-   recommendation, and browse.
+   followed by
+   `python scripts/write_bridge_build_manifest.py dist/vpn_bridge_host.exe --out dist/bridge-build.json`.
+   The installer refuses to continue if that manifest disagrees with
+   `host/native_host.py`, which is how a rebuilt source paired with a stale
+   executable gets caught instead of failing mysteriously at runtime.
+2. **Run `INSTALL-OR-REPAIR.cmd`.** It does the five steps above.
+3. **Load the extension** from this checkout's `extension` directory, as in
+   option 1.
 
 > **Loading only the extension does not give you a VPN.** Without a registered
 > native host, the popup renders but the connection controls cannot work: the

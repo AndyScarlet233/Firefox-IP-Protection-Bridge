@@ -92,6 +92,58 @@ jobs:
             dist/vpn_bridge_host.exe
             dist/bridge-build.json
 
+      # A tagged release also ships everything a user needs in one archive, so
+      # that installing does not mean cloning the repository and finding the
+      # executable separately. A manual run builds it too, which is how the
+      # packaging step is tested without publishing a release. The archive
+      # carries a top-level directory so it extracts cleanly.
+      - name: Assemble the one-click bundle
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $name = "Firefox-IP-Protection-Bridge-${{ github.ref_name }}"
+          $stage = Join-Path "bundle" $name
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          foreach ($dir in @("extension", "host", "vendor", "config", "scripts", "docs")) {
+            Copy-Item -LiteralPath $dir -Destination $stage -Recurse -Force
+          }
+          foreach ($file in @(
+            "INSTALL-OR-REPAIR.cmd", "README.md", "README.zh-CN.md", "LICENSE",
+            "THIRD_PARTY.md", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md"
+          )) {
+            if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $stage -Force }
+          }
+          New-Item -ItemType Directory -Path (Join-Path $stage "runtime") -Force | Out-Null
+          Copy-Item -LiteralPath "dist/vpn_bridge_host.exe" -Destination (Join-Path $stage "runtime") -Force
+          Copy-Item -LiteralPath "dist/bridge-build.json" -Destination (Join-Path $stage "runtime") -Force
+
+          # Byte-compiled caches are never wanted in an archive; drop them before
+          # the check below, which still lists them as a tripwire.
+          Get-ChildItem -LiteralPath $stage -Recurse -Force -Directory -Filter "__pycache__" |
+            Remove-Item -Recurse -Force
+
+          # Nothing private may travel in a public archive. The audit rules apply
+          # to the source tree; this is the same check against the staged copy.
+          $forbidden = Get-ChildItem -LiteralPath $stage -Recurse -Force |
+            Where-Object { $_.FullName -match '\\(tokens|logs|data|export|__pycache__|\.git)(\\|$)' -or $_.Name -match 'credentials.*\.json$|\.log$|\.jwt$|\.pem$|session_token' }
+          if ($forbidden) {
+            $forbidden | ForEach-Object { Write-Host "forbidden in bundle: $($_.FullName)" }
+            Write-Error "the bundle would contain private runtime state"
+            exit 1
+          }
+
+          Compress-Archive -Path $stage -DestinationPath (Join-Path "dist" "$name.zip") -CompressionLevel Optimal
+          $zip = Get-Item (Join-Path "dist" "$name.zip")
+          Write-Host "bundle: $($zip.Name) ($([math]::Round($zip.Length/1MB,2)) MB)"
+
+      - name: Upload the bundle
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle
+          if-no-files-found: error
+          path: dist/*.zip
+
   release:
     name: Attach the build to the release
     needs: build
@@ -106,18 +158,40 @@ jobs:
           name: vpn_bridge_host
           path: dist
 
+      - name: Download the bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: bundle
+          path: dist
+
       - name: Publish the release assets
         uses: softprops/action-gh-release@v3
         with:
           files: |
+            dist/*.zip
             dist/vpn_bridge_host.exe
             dist/bridge-build.json
           body: |
-            Frozen `vpn_bridge_host.exe` and the `bridge-build.json` that records
-            the source and executable hashes.
+            ## Easiest route
 
-            Download both files, then follow the repository README to register the
-            host. The executable is unsigned, so Windows SmartScreen may warn on
-            first run; verify `executableSha256` in `bridge-build.json` if you want
-            to confirm the download.
+            Download **Firefox-IP-Protection-Bridge-${{ github.ref_name }}.zip**,
+            extract it anywhere, and double-click `INSTALL-OR-REPAIR.cmd`. The
+            script finds a Python interpreter, copies the runtime into
+            `%LOCALAPPDATA%\FirefoxChromeVPNBridge`, installs the Python packages,
+            downloads the browser-login component (about 80 MB, skip it with
+            `-SkipBrowserLogin`) and registers the Native Messaging host for
+            Chrome, Edge, Chromium and Brave.
+
+            It then prints the one step it cannot automate: loading the unpacked
+            extension from the `extension` folder inside the archive.
+
+            ## Individual files
+
+            `vpn_bridge_host.exe` is the frozen bridge on its own, for people who
+            already have a checkout; `bridge-build.json` records the source and
+            executable hashes that the setup script verifies.
+
+            The executable is unsigned, so Windows SmartScreen may warn on first
+            run. Compare `executableSha256` in `bridge-build.json` if you want to
+            confirm the download.
           fail_on_unmatched_files: true

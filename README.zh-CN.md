@@ -86,35 +86,40 @@ Firefox IP 保护是 Mozilla VPN 的一项功能，把浏览器流量经由 Fast
 
 有两条路径可以得到可用的安装。两者都源自同一份代码，区别只在于由谁构建运行时。
 
-### 方式一 —— 直接取预编译的桥接程序
+### 方式一 —— 一键整合包（推荐）
 
-桥接必须是一个单独的 `.exe`：Chrome 按可执行文件路径启动本地宿主，无法给它传脚本参数。
-推送 `v*` 标签会触发 [`.github/workflows/build-bridge.yml`](.github/workflows/build-bridge.yml)，
-在 Windows runner 上把它冻结成单文件、用真实的 Native Messaging 协议与产物对话验证，
-然后把 `vpn_bridge_host.exe` 与 `bridge-build.json` 附到 Release 上。下载这两个文件即可
-免去自备 Windows 构建工具链；运行时目录的组装与宿主注册仍按方式二进行。
+从 [Releases](../../releases) 页面下载 `Firefox-IP-Protection-Bridge-<版本>.zip`，解压到任意
+目录，双击 **`INSTALL-OR-REPAIR.cmd`**。脚本会依次：
 
-该工作流也可在 Actions 页面手动触发，产物同样以构建附件的形式提供下载。
+1. 查找 Python 3.9 或更新版本；若一个都没有，会提议用 `winget` 自动安装；
+2. 把运行时复制到 `%LOCALAPPDATA%\FirefoxChromeVPNBridge`；
+3. 安装桥接所需的 Python 依赖；
+4. 下载浏览器登录组件（约 80 MB；加 `-SkipBrowserLogin` 可跳过，之后重跑即可补装）；
+5. 写入 Native Messaging 清单，并为 Chrome、Edge、Chromium 和 Brave 注册。
 
-### 方式二 —— 自行构建
+可以放心重复运行：第二次运行等于修复或升级既有安装。
 
-本仓库的用途是源码审查与加载未打包扩展。构建运行时是独立的一步，详见
-[`docs/BUILD.md`](docs/BUILD.md)。
+随后脚本会打印唯一无法自动化的一步——加载整合包内 `extension` 目录里的未打包扩展：
 
-1. **构建运行时。** 本地执行
+1. 打开 `chrome://extensions`。
+2. 打开右上角的**开发者模式**。
+3. 点击**加载已解压的扩展程序**，选择该 `extension` 目录。
+4. 打开弹窗，展开**设置**，点击**浏览器登录**。
+
+### 方式二 —— 从源码检出开始
+
+同一个脚本也能在 git 检出里使用。它需要一个已冻结的桥接可执行文件——Chrome 按可执行
+文件路径启动本地宿主，无法直接运行 `.py` 文件；原因详见 [`docs/BUILD.md`](docs/BUILD.md)。
+
+1. **取得可执行文件。** 要么从 Releases 页面把 `vpn_bridge_host.exe` 与
+   `bridge-build.json` 下载到 `dist\`，要么自行构建：
    `python -m PyInstaller --noconfirm --clean --distpath dist --workpath build tools/bridge-rebuild/vpn_bridge_host.spec`，
-   或直接下载方式一所述的构建附件。修复脚本会拒绝在纯源码检出上运行：Chrome 的
-   Native Messaging 清单只指向单个可执行文件，因此必须先有构建好的
-   `runtime\vpn_bridge_host.exe`。
-2. **注册 Native Messaging 宿主。** 在仓库根目录运行 `INSTALL-OR-REPAIR.cmd`，或直接
-   在 PowerShell 中运行 `scripts/install-or-repair.ps1`。它会把宿主清单写到已构建的
-   可执行文件旁，并在 `HKCU` 下为 Chrome、Edge、Chromium 和 Brave 注册。它会先停止
-   残留的宿主进程。若运行时缺失，脚本会中止并把你指回 `docs/BUILD.md`。
-3. **加载扩展。** 打开 `chrome://extensions`，开启**开发者模式**，点击**加载已解压的
-   扩展程序**，选择本仓库的 `extension` 目录。
-4. **获取凭据。** 打开弹窗，展开 设置，点击 **浏览器登录**；或者在已登录 Firefox 的
-   电脑上点击 **从 Firefox 导入**。参见[获取凭据](#获取凭据)。
-5. **连接。** 点击 开启 VPN，选择地区或保留推荐项，然后开始浏览。
+   再执行
+   `python scripts/write_bridge_build_manifest.py dist/vpn_bridge_host.exe --out dist/bridge-build.json`。
+   若该清单与 `host/native_host.py` 不一致，安装器会拒绝继续——这正是"源码已改、可执行
+   文件仍是旧的"这种情况被发现的地方，而不是等到运行时报出莫名其妙的错误。
+2. **运行 `INSTALL-OR-REPAIR.cmd`。** 它会完成上面的五个步骤。
+3. **加载扩展**，选择本检出的 `extension` 目录，同方式一。
 
 > **只加载扩展并不能获得 VPN。** 没有注册好的本地宿主时，弹窗可以渲染，但连接控制项
 > 无法工作：扩展既无法获取凭据，也无法启动本地代理。请把"只有扩展"视为界面预览。
