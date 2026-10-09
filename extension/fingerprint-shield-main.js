@@ -169,14 +169,68 @@
   const UNMASKED_VENDOR = 0x9245;
   const UNMASKED_RENDERER = 0x9246;
 
+  // Every numeric constant the browser exposes for either WebGL generation. A
+  // pname outside this set cannot be valid anywhere.
+  const knownWebGLConstants = new Set([UNMASKED_VENDOR, UNMASKED_RENDERER]);
+  for (const name of ["WebGLRenderingContext", "WebGL2RenderingContext"]) {
+    const ctor = globalThis[name];
+    if (!ctor) continue;
+    try {
+      for (const key of Object.getOwnPropertyNames(ctor)) {
+        const value = ctor[key];
+        if (typeof value === "number") knownWebGLConstants.add(value);
+      }
+    } catch (_) {}
+  }
+
+  // Which extensions a context has actually enabled, recorded by wrapping
+  // getExtension rather than by calling it. Calling getExtension to find out
+  // would itself enable the extension as a side effect, which both defeats the
+  // check and mutates the page's context behind its back.
+  const enabledExtensions = new WeakMap();
+  function trackExtensionUse(proto) {
+    return replaceMethod(proto, "getExtension", (original) => function (name) {
+      const result = original.call(this, name);
+      try {
+        if (result && typeof name === "string") {
+          let names = enabledExtensions.get(this);
+          if (!names) { names = new Set(); enabledExtensions.set(this, names); }
+          names.add(name.toLowerCase());
+        }
+      } catch (_) {}
+      return result;
+    });
+  }
+  function extensionIsEnabled(context, name) {
+    try { return Boolean(enabledExtensions.get(context)?.has(name)); } catch (_) { return false; }
+  }
+
   function wrapWebGLGetParameter(proto) {
     return replaceMethod(proto, "getParameter", (original) => function (parameter) {
-      if (config.active) {
-        try {
-          if (parameter === UNMASKED_VENDOR) return GPU_VENDORS[mix(config.seed) % GPU_VENDORS.length];
-          if (parameter === UNMASKED_RENDERER) return GPU_RENDERERS[mix(config.seed ^ 0x9e37) % GPU_RENDERERS.length];
-        } catch (_) {}
+      // UNMASKED_VENDOR_WEBGL and UNMASKED_RENDERER_WEBGL are only legal while
+      // WEBGL_debug_renderer_info is enabled. A clean browser answers null and
+      // logs INVALID_ENUM otherwise. Answering with a spoofed string regardless
+      // would be wrong twice over: a page that never enables the extension would
+      // read a renderer where a clean browser gives null, which is itself a way
+      // to detect the shield; and forwarding the call makes Chrome attribute its
+      // own INVALID_ENUM to this file. Both are avoided by answering null here.
+      if (parameter === UNMASKED_VENDOR || parameter === UNMASKED_RENDERER) {
+        if (!extensionIsEnabled(this, "webgl_debug_renderer_info")) return null;
+        if (!config.active) return original.call(this, parameter);
+        return parameter === UNMASKED_VENDOR
+          ? GPU_VENDORS[mix(config.seed) % GPU_VENDORS.length]
+          : GPU_RENDERERS[mix(config.seed ^ 0x9e37) % GPU_RENDERERS.length];
       }
+      // A non-numeric pname can never be valid, so answer null instead of
+      // handing the browser something it will reject and log.
+      if (typeof parameter !== "number") return null;
+      // Same for a number the browser does not expose as a constant at all:
+      // there is no context in which it is a legal pname. Forwarding it would
+      // only make Chrome log INVALID_ENUM with this file in the stack, which is
+      // how a page's own bad call ends up reported as an extension error.
+      // Constants that exist but are illegal for this particular context are
+      // still forwarded, so the browser stays the authority on those.
+      if (!knownWebGLConstants.has(parameter)) return null;
       return original.call(this, parameter);
     });
   }
@@ -355,6 +409,16 @@
       uninstallPatches();
       installPatches();
     }
+  }
+
+  // Installed immediately rather than with the rest of the patches. It changes
+  // no behaviour, it must be watching before the configuration arrives so that a
+  // page enabling the debug extension during that window is still recorded, and
+  // it is deliberately never undone: dropping it would only blind the check
+  // without restoring anything.
+  for (const name of ["WebGLRenderingContext", "WebGL2RenderingContext"]) {
+    const proto = globalThis[name]?.prototype;
+    if (proto) trackExtensionUse(proto);
   }
 
   window.addEventListener("message", (event) => {
