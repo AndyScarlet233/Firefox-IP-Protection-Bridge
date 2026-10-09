@@ -122,40 +122,42 @@ let availableLocations = [];
 let bootstrapPollActive = false;
 let bootstrapChallengeNeed = null;
 
-// Country names are the one list that cannot live in messages.json: the same
-// code has to render as a Chinese name in a Chinese UI and as an English name
-// in an English UI. The Chinese table below is the interface's original
-// wording; an English UI is served by Intl.DisplayNames instead, which already
-// ships accurate names for every code the pool can hand back.
-const COUNTRY_NAMES_ZH = {
-  AT: "奥地利", AU: "澳大利亚", BE: "比利时", BG: "保加利亚", CA: "加拿大",
-  CH: "瑞士", CL: "智利", CO: "哥伦比亚", DE: "德国", DK: "丹麦",
-  ES: "西班牙", FI: "芬兰", FR: "法国", GB: "英国", IE: "爱尔兰",
-  IT: "意大利", JP: "日本", MX: "墨西哥", MY: "马来西亚", NL: "荷兰",
-  NO: "挪威", NZ: "新西兰", PL: "波兰", PT: "葡萄牙", SE: "瑞典",
-  SG: "新加坡", TH: "泰国", US: "美国", ZA: "南非"
-};
-
-let englishRegionNames = null;
-function englishRegionName(code) {
-  if (englishRegionNames === null) {
+// Country names cannot live in messages.json: one code has to render in
+// whichever language the interface is in. Intl.DisplayNames ships accurate
+// names for every ISO 3166-1 code in every locale Chrome supports, so it is the
+// only source used here.
+//
+// A hand-written table cannot keep up with this list. Mozilla rolls regions out
+// gradually, and the table this replaced had already drifted: it was missing
+// Argentina, Brazil, Ghana, Korea, Peru and the Philippines, which the pool
+// offers today, while still listing Switzerland and Poland, which it no longer
+// does. It also had to be duplicated for every writing system; Intl follows the
+// interface language, so a Traditional Chinese UI gets Traditional names for
+// free.
+let regionNames = null;
+let regionNamesLocale = null;
+function regionName(code) {
+  const key = String(code || "").toUpperCase();
+  if (!key) return "";
+  const locale = uiLanguage() || "en";
+  if (regionNamesLocale !== locale) {
     try {
-      englishRegionNames = new Intl.DisplayNames([uiLanguage() || "en"], { type: "region" });
+      regionNames = new Intl.DisplayNames([locale], { type: "region" });
     } catch (_) {
-      englishRegionNames = false;
+      regionNames = false;
     }
+    regionNamesLocale = locale;
   }
-  if (!englishRegionNames) return "";
-  try { return englishRegionNames.of(code) || ""; }
+  if (!regionNames) return "";
+  try { return regionNames.of(key) || ""; }
   catch (_) { return ""; }
 }
 
-// `fallback` covers codes the pool reports that are in neither list.
+// `fallback` is the English name the pool reports, used when Intl has no entry.
 function countryNameFor(code, fallback = "") {
   const key = String(code || "").toUpperCase();
   if (!key) return fallback || "";
-  if (ENGLISH_UI) return englishRegionName(key) || fallback || key;
-  return COUNTRY_NAMES_ZH[key] || fallback || key;
+  return regionName(key) || fallback || key;
 }
 
 function populateLocations(items = []) {
@@ -163,7 +165,11 @@ function populateLocations(items = []) {
   const previous = state.country || country.value || "REC";
   const availableCodes = new Set(availableLocations.filter(x => x && x.available !== false).map(x => String(x.code || "").toUpperCase()));
   const seenCodes = new Set(availableLocations.map(x => String(x.code || "").toUpperCase()).filter(Boolean));
-  const allCodes = new Set([...Object.keys(COUNTRY_NAMES_ZH), ...seenCodes]);
+  // The pool's list is authoritative. The only entry kept beyond it is the
+  // region already selected, so a refresh that fails cannot silently drop the
+  // user's choice back to "recommended".
+  const selected = String(state.country || "").toUpperCase();
+  const allCodes = new Set([...seenCodes, ...(selected && selected !== "REC" ? [selected] : [])]);
 
   country.innerHTML = "";
   const recommended = document.createElement("option");
